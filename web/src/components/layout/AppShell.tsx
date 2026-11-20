@@ -1,46 +1,30 @@
 import { useState } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
-import { TopNavbar } from './TopNavbar'
-import { SiteHeader } from './SiteHeader'
-import { NavDrawer } from './NavDrawer'
+import { Sidebar } from './Sidebar'
+import { Topbar } from './Topbar'
 
 export function AppShell() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   if (!isAuthenticated()) return <Navigate to="/login" replace />
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        backgroundColor: 'var(--color-bg-page)',
-        fontFamily: "'Open Sans', sans-serif",
-      }}
-    >
-      {/* Top navbar (dark blue bar + teal line) */}
-      <TopNavbar onToggleSidebar={() => setDrawerOpen((v) => !v)} />
-
-      {/* Site header (logo bar + horizontal nav) */}
-      <SiteHeader />
-
-      {/* Body: optional drawer + main content */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <NavDrawer open={drawerOpen} />
-
-        {/* Page content */}
-        <main
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '0',
-          }}
-        >
-          <Outlet />
+    <div className="flex min-h-screen" style={{ background: 'var(--color-bg-page)' }}>
+      <Sidebar mobileOpen={mobileOpen} onNavigate={() => setMobileOpen(false)} />
+      {mobileOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMobileOpen(false)} />}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <Topbar onMobileMenu={() => setMobileOpen(true)} />
+        <main className="flex-1 px-4 lg:px-8 py-6 lg:py-8">
+          <div className="mx-auto max-w-[1400px] animate-in">
+            <Outlet />
+          </div>
         </main>
+        <footer className="px-8 py-5 text-xs muted border-t flex flex-wrap gap-x-6 gap-y-1 justify-between" style={{ borderColor: 'var(--color-border)' }}>
+          <span>© {new Date().getFullYear()} Altus Vera Learning Management System</span>
+          <span>Data retention summary · Get the mobile app · Policies</span>
+        </footer>
       </div>
     </div>
   )

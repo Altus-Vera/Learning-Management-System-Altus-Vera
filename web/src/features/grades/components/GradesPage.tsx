@@ -1,164 +1,135 @@
-import { useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Folder, ClipboardList } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Folder, Download } from 'lucide-react'
+import { useLmsStore, CURRENT_STUDENT_ID, STUDENTS, type Course } from '../../../store/lmsStore'
+import { useRole } from '../../../store/uiStore'
+import { ActivityIcon } from '../../../components/ActivityIcon'
+import { toast } from '../../../components/Toast'
 
-type ReportTab = 'overview' | 'user'
+const assigns = (c: Course) => c.sections.flatMap((s) => s.activities.filter((a) => a.type === 'assign' && a.visible))
 
-interface GradeRow {
-  id: number
-  name: string
-  calculatedWeight: string
-  grade: string
-  range: string
-  percentage: string
-  feedback: string
-  contribution: string
-  isCategory?: boolean
+function useTotals(c: Course, studentId: string) {
+  const subs = useLmsStore((s) => s.submissions)
+  const items = assigns(c)
+  const graded = items.filter((a) => subs[`${a.id}:${studentId}`]?.grade != null)
+  const sum = graded.reduce((n, a) => n + subs[`${a.id}:${studentId}`]!.grade!, 0)
+  const max = graded.reduce((n, a) => n + a.assign!.maxGrade, 0)
+  return { items, total: graded.length ? (sum / max) * 100 : null }
 }
 
-const mockGrades: GradeRow[] = [
-  { id: 0, name: 'BS401.3-Business Policy and Strategy', calculatedWeight: '', grade: '', range: '', percentage: '', feedback: '', contribution: '', isCategory: true },
-  { id: 1, name: 'Tutorial 01', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 2, name: 'Tutorial 02', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 3, name: 'Tutorial 03', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 4, name: 'Tutorial 04', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 5, name: 'Tutorial 05', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 6, name: 'Tutorial 06', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 7, name: 'Tutorial 07', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 8, name: 'Tutorial 08', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 9, name: 'Tutorial 09', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 10, name: 'Tutorial 10', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 11, name: 'Assignment Presentation slides', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 12, name: 'Assignment final Report submission', calculatedWeight: '0.00 %\n( Empty )', grade: '-', range: '0–100', percentage: '-', feedback: '-', contribution: '0.00 %' },
-  { id: 99, name: 'Course total', calculatedWeight: '-', grade: '0.00', range: '0–100', percentage: '0.00 %', feedback: '-', contribution: '-', isCategory: false },
-]
+const letter = (p: number | null) => (p === null ? '-' : p >= 85 ? 'A+' : p >= 75 ? 'A' : p >= 70 ? 'A-' : p >= 65 ? 'B+' : p >= 60 ? 'B' : p >= 55 ? 'B-' : p >= 50 ? 'C+' : p >= 45 ? 'C' : p >= 40 ? 'C-' : 'F')
 
-export function GradesPage() {
-  const { courseId } = useParams<{ courseId: string }>()
-  const [tab, setTab] = useState<ReportTab>('user')
-
-  const courseName = courseId ? 'BS401.3-Business Policy and Strategy' : 'All courses'
-
-  const thStyle: React.CSSProperties = {
-    padding: '8px 10px',
-    textAlign: 'left',
-    fontSize: '13px',
-    fontWeight: 600,
-    color: 'var(--color-heading)',
-    borderBottom: '2px solid var(--color-border)',
-    whiteSpace: 'nowrap',
-  }
-
-  const tdStyle: React.CSSProperties = {
-    padding: '8px 10px',
-    fontSize: '13px',
-    color: 'var(--color-text)',
-    borderBottom: '1px solid var(--color-border)',
-    verticalAlign: 'top',
-  }
-
+function UserReport({ course }: { course: Course }) {
+  const subs = useLmsStore((s) => s.submissions)
+  const { items, total } = useTotals(course, CURRENT_STUDENT_ID)
+  const weight = items.length ? 100 / items.length : 0
   return (
-    <div style={{ padding: '16px 20px' }}>
-      <h2 style={{ fontSize: '18px', color: 'var(--color-heading)', marginBottom: 16, fontWeight: 600 }}>
-        User report - <span style={{ fontWeight: 400 }}>DVD Silva</span>
-      </h2>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', marginBottom: 20, border: '1px solid var(--color-border)', borderRadius: 4, overflow: 'hidden' }}>
-        <button
-          onClick={() => setTab('overview')}
-          style={{
-            flex: 1,
-            padding: '10px 16px',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '14px',
-            backgroundColor: tab === 'overview' ? '#51666C' : 'var(--color-bg-page)',
-            color: tab === 'overview' ? '#fff' : 'var(--color-text)',
-            fontWeight: tab === 'overview' ? 600 : 400,
-          }}
-        >
-          Overview report
-        </button>
-        <button
-          onClick={() => setTab('user')}
-          style={{
-            flex: 1,
-            padding: '10px 16px',
-            border: 'none',
-            borderLeft: '1px solid var(--color-border)',
-            cursor: 'pointer',
-            fontSize: '14px',
-            backgroundColor: tab === 'user' ? '#51666C' : 'var(--color-bg-page)',
-            color: tab === 'user' ? '#fff' : 'var(--color-text)',
-            fontWeight: tab === 'user' ? 600 : 400,
-          }}
-        >
-          User report
-        </button>
+    <div className="card overflow-hidden">
+      <div className="flex items-center p-5 border-b" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="mr-auto"><h2 className="font-bold">User report</h2><div className="text-sm muted">Your grades for {course.shortName}-{course.fullName}</div></div>
+        <div className="text-right"><div className="text-xs muted">Course total</div><div className="text-2xl font-bold" style={{ color: 'var(--color-primary)' }}>{total === null ? '-' : `${total.toFixed(2)}%`}</div></div>
       </div>
-
-      {tab === 'user' && (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--color-bg-page)' }}>
-            <thead>
-              <tr style={{ backgroundColor: 'var(--color-bg-nav-drawer)' }}>
-                <th style={thStyle}>Grade item</th>
-                <th style={thStyle}>Calculated weight</th>
-                <th style={thStyle}>Grade</th>
-                <th style={thStyle}>Range</th>
-                <th style={thStyle}>Percentage</th>
-                <th style={thStyle}>Feedback</th>
-                <th style={{ ...thStyle, fontSize: '12px' }}>Contribution to total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockGrades.map((row) => (
-                <tr
-                  key={row.id}
-                  style={{
-                    backgroundColor: row.isCategory ? 'var(--color-bg-nav-drawer)' : row.name === 'Course total' ? 'var(--color-bg-nav-drawer)' : 'var(--color-bg-page)',
-                  }}
-                >
-                  <td style={{ ...tdStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {row.isCategory ? (
-                      <>
-                        <Folder size={16} color="#666" />
-                        <span style={{ fontWeight: 600, color: 'var(--color-heading)' }}>{row.name}</span>
-                      </>
-                    ) : row.name === 'Course total' ? (
-                      <span style={{ fontWeight: 600 }}>{row.name}</span>
-                    ) : (
-                      <>
-                        <ClipboardList size={16} color="#1565c0" style={{ flexShrink: 0 }} />
-                        <a href="#" onClick={(e) => e.preventDefault()} style={{ color: '#1565c0', textDecoration: 'none', fontSize: '13px' }}>
-                          {row.name}
-                        </a>
-                      </>
-                    )}
-                  </td>
-                  <td style={tdStyle}>
-                    {row.calculatedWeight.split('\n').map((line, i) => (
-                      <div key={i} style={{ color: i === 1 ? '#888' : 'var(--color-text)', fontSize: i === 1 ? '12px' : '13px' }}>{line}</div>
-                    ))}
-                  </td>
-                  <td style={tdStyle}>{row.grade}</td>
-                  <td style={tdStyle}>{row.range}</td>
-                  <td style={tdStyle}>{row.percentage}</td>
-                  <td style={tdStyle}>{row.feedback}</td>
-                  <td style={tdStyle}>{row.contribution}</td>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead><tr className="text-left text-xs uppercase tracking-wider muted" style={{ background: 'var(--color-bg-subtle)' }}>
+            {['Grade item', 'Calculated weight', 'Grade', 'Range', 'Percentage', 'Feedback', 'Contribution to course total'].map((h) => <th key={h} className="px-5 py-3 font-semibold whitespace-nowrap">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}><td colSpan={7} className="px-5 py-3 font-semibold" style={{ color: 'var(--color-heading)' }}><span className="flex items-center gap-2"><Folder size={16} className="muted" />{course.shortName}-{course.fullName}</span></td></tr>
+            {items.map((a) => {
+              const sub = subs[`${a.id}:${CURRENT_STUDENT_ID}`]
+              const g = sub?.grade ?? null
+              const pct = g === null ? null : (g / a.assign!.maxGrade) * 100
+              return (
+                <tr key={a.id} className="border-t hover:bg-[var(--color-bg-card-hover)]" style={{ borderColor: 'var(--color-border)' }}>
+                  <td className="px-5 py-3 pl-10"><Link to={`/courses/${course.id}/assign/${a.id}`} className="flex items-center gap-2.5 font-medium" style={{ color: 'var(--color-heading)' }}><ActivityIcon type="assign" size={28} />{a.name}</Link></td>
+                  <td className="px-5 py-3">{g === null ? <span className="muted">0.00 % <span className="text-xs">( Empty )</span></span> : `${weight.toFixed(2)} %`}</td>
+                  <td className="px-5 py-3 font-semibold" style={{ color: 'var(--color-heading)' }}>{g === null ? '-' : g.toFixed(2)}</td>
+                  <td className="px-5 py-3 muted">0–{a.assign!.maxGrade}</td>
+                  <td className="px-5 py-3">{pct === null ? '-' : <span className={`badge ${pct >= 50 ? 'badge-green' : 'badge-red'}`}>{pct.toFixed(2)} %</span>}</td>
+                  <td className="px-5 py-3 muted max-w-[220px] truncate">{sub?.feedback || '-'}</td>
+                  <td className="px-5 py-3 muted">{pct === null ? '0.00 %' : `${((pct * weight) / 100).toFixed(2)} %`}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {tab === 'overview' && (
-        <div style={{ padding: 20, color: 'var(--color-text-muted)', textAlign: 'center' }}>
-          Overview report for {courseName}
-        </div>
-      )}
+              )
+            })}
+            <tr className="border-t font-semibold" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-subtle)' }}>
+              <td className="px-5 py-3" style={{ color: 'var(--color-heading)' }}>Course total</td><td className="px-5 py-3">-</td>
+              <td className="px-5 py-3" style={{ color: 'var(--color-heading)' }}>{total === null ? '-' : total.toFixed(2)}</td><td className="px-5 py-3">0–100</td>
+              <td className="px-5 py-3">{total === null ? '-' : `${total.toFixed(2)} %`}</td><td className="px-5 py-3">-</td><td className="px-5 py-3">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
+
+function GraderReport({ course }: { course: Course }) {
+  const subs = useLmsStore((s) => s.submissions)
+  const items = assigns(course)
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center p-5 border-b" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="mr-auto"><h2 className="font-bold">Grader report</h2><div className="text-sm muted">{STUDENTS.length} students · {items.length} grade items</div></div>
+        <button className="btn btn-secondary btn-sm" onClick={() => toast('Exporting grades to Excel…', 'info')}><Download size={15} /> Export</button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="text-sm">
+          <thead><tr className="text-left text-xs muted" style={{ background: 'var(--color-bg-subtle)' }}>
+            <th className="px-4 py-3 font-semibold sticky left-0 min-w-[220px]" style={{ background: 'var(--color-bg-subtle)' }}>Student</th>
+            {items.map((a) => <th key={a.id} className="px-3 py-3 font-semibold whitespace-nowrap"><Link to={`/courses/${course.id}/assign/${a.id}?tab=submissions`} style={{ color: 'var(--color-heading)' }}>{a.name}</Link></th>)}
+            <th className="px-4 py-3 font-semibold">Course total</th>
+          </tr></thead>
+          <tbody>
+            {STUDENTS.map((st) => {
+              const graded = items.filter((a) => subs[`${a.id}:${st.id}`]?.grade != null)
+              const tot = graded.length ? (graded.reduce((n, a) => n + subs[`${a.id}:${st.id}`]!.grade! / a.assign!.maxGrade, 0) / graded.length) * 100 : null
+              return (
+                <tr key={st.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <td className="px-4 py-2.5 font-medium sticky left-0" style={{ color: 'var(--color-heading)', background: 'var(--color-bg-card)' }}>{st.name}</td>
+                  {items.map((a) => { const g = subs[`${a.id}:${st.id}`]?.grade; return <td key={a.id} className="px-3 py-2.5 text-center">{g == null ? <span className="muted">-</span> : g.toFixed(0)}</td> })}
+                  <td className="px-4 py-2.5 font-semibold" style={{ color: 'var(--color-primary)' }}>{tot === null ? '-' : `${tot.toFixed(1)}%`}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+export function CourseGrades({ course }: { course: Course }) {
+  const { isTeacher } = useRole()
+  return isTeacher ? <GraderReport course={course} /> : <UserReport course={course} />
+}
+
+function OverviewRow({ c }: { c: Course }) {
+  const { total } = useTotals(c, CURRENT_STUDENT_ID)
+  return (
+    <tr className="border-t hover:bg-[var(--color-bg-card-hover)]" style={{ borderColor: 'var(--color-border)' }}>
+      <td className="px-5 py-4"><Link to={`/courses/${c.id}?tab=grades`} className="flex items-center gap-3 font-medium" style={{ color: 'var(--color-heading)' }}><span className="w-9 h-9 rounded-xl grid place-items-center text-[10px] font-bold text-white" style={{ background: c.color }}>{c.shortName.slice(0, 2)}</span>{c.shortName}-{c.fullName}</Link></td>
+      <td className="px-5 py-4 muted">{c.term}</td>
+      <td className="px-5 py-4 font-semibold" style={{ color: 'var(--color-heading)' }}>{total === null ? '-' : `${total.toFixed(2)}%`}</td>
+      <td className="px-5 py-4">{total === null ? <span className="muted">-</span> : <span className={`badge ${total >= 50 ? 'badge-green' : 'badge-red'}`}>{letter(total)}</span>}</td>
+    </tr>
+  )
+}
+
+export function GradesPage() {
+  const courses = useLmsStore((s) => s.courses)
+  return (
+    <div className="space-y-6">
+      <div><h1 className="text-2xl font-bold">Grades overview</h1><p className="text-sm muted">Courses I am taking</p></div>
+      <div className="card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead><tr className="text-left text-xs uppercase tracking-wider muted" style={{ background: 'var(--color-bg-subtle)' }}>
+            <th className="px-5 py-3 font-semibold">Course name</th><th className="px-5 py-3 font-semibold">Term</th><th className="px-5 py-3 font-semibold">Grade</th><th className="px-5 py-3 font-semibold">Letter</th>
+          </tr></thead>
+          <tbody>{courses.map((c) => <OverviewRow key={c.id} c={c} />)}</tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+export default GradesPage

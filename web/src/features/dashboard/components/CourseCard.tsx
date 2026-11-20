@@ -1,117 +1,76 @@
-import { Link } from 'react-router-dom'
-import { MoreHorizontal } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { MoreVertical, Star, EyeOff, Eye } from 'lucide-react'
+import { useLmsStore, courseProgress, type Course } from '../../../store/lmsStore'
 
-interface CourseCardProps {
-  id: number
-  name: string
-  code: string
-  semester: string
-  progress: number
-  color?: string
-  thumbnail?: string
+export function CourseBanner({ course, className = '' }: { course: Course; className?: string }) {
+  return (
+    <div className={`relative overflow-hidden ${className}`} style={{ background: `linear-gradient(135deg, ${course.color}, color-mix(in srgb, ${course.color} 55%, #0F172A))` }}>
+      <svg className="absolute inset-0 w-full h-full opacity-20" preserveAspectRatio="none">
+        <defs><pattern id={`p${course.id}`} width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.6" fill="#fff" /></pattern></defs>
+        <rect width="100%" height="100%" fill={`url(#p${course.id})`} />
+      </svg>
+      <div className="absolute -right-6 -bottom-10 w-36 h-36 rounded-full bg-white/10" />
+      <div className="absolute right-16 -top-12 w-28 h-28 rounded-full bg-white/10" />
+      <span className="absolute left-4 bottom-3 text-white/90 text-xs font-bold tracking-wider">{course.shortName}</span>
+    </div>
+  )
 }
 
-// Colour palette cycling for course thumbnails (matching NLearn's teal/blue/green style)
-const THUMB_COLORS = [
-  'linear-gradient(135deg, #1976D2 0%, #0D47A1 100%)',
-  'linear-gradient(135deg, #00897B 0%, #004D40 100%)',
-  'linear-gradient(135deg, #5E35B1 0%, #311B92 100%)',
-  'linear-gradient(135deg, #E53935 0%, #B71C1C 100%)',
-  'linear-gradient(135deg, #00ACC1 0%, #006064 100%)',
-  'linear-gradient(135deg, #43A047 0%, #1B5E20 100%)',
-]
-
-export function CourseCard({ id, name, code, semester, progress, color }: CourseCardProps) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const thumbColor = color ?? THUMB_COLORS[id % THUMB_COLORS.length]
-
+export function CourseMenu({ course }: { course: Course }) {
+  const [open, setOpen] = useState(false)
+  const toggleStar = useLmsStore((s) => s.toggleStar)
+  const toggleHidden = useLmsStore((s) => s.toggleHidden)
   return (
-    <div
-      className="card"
-      style={{
-        border: '1px solid var(--color-border-card)',
-        borderRadius: 'var(--radius-card)',
-        overflow: 'hidden',
-        position: 'relative',
-        transition: 'box-shadow 0.15s',
-        cursor: 'pointer',
-      }}
-      onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px var(--color-shadow)')}
-      onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.boxShadow = 'none')}
-    >
-      {/* Three-dot menu */}
-      <div style={{ position: 'absolute', top: '8px', right: '8px', zIndex: 10 }}>
-        <button
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
-          style={{
-            background: 'rgba(0,0,0,0.3)',
-            border: 'none',
-            borderRadius: '50%',
-            width: '28px',
-            height: '28px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: '#fff',
-          }}
-        >
-          <MoreHorizontal size={15} />
-        </button>
-        {menuOpen && (
-          <div
-            className="dropdown-menu"
-            style={{ position: 'absolute', right: 0, top: '100%', zIndex: 20, minWidth: '140px' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="dropdown-item">Mark as complete</div>
-            <div className="dropdown-item">Remove from view</div>
-            <div className="dropdown-item">Hide</div>
-            <div className="dropdown-item" style={{ color: '#dc3545' }}>Unstar</div>
-          </div>
-        )}
-      </div>
-
-      {/* Thumbnail */}
-      <Link to={`/courses/${id}`} style={{ textDecoration: 'none' }}>
-        <div
-          style={{
-            height: '100px',
-            background: thumbColor,
-            backgroundColor: 'var(--color-bg-thumb)',
-          }}
-        />
-
-        {/* Card body */}
-        <div style={{ padding: '10px 12px' }}>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-            {semester}
-          </div>
-          <div
-            style={{
-              fontSize: '13px',
-              color: 'var(--color-heading)',
-              fontWeight: 500,
-              lineHeight: 1.4,
-              overflow: 'hidden',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-            }}
-          >
-            {name}
-          </div>
-
-          {/* Progress bar */}
-          <div className="progress-bar-container" style={{ marginTop: '10px' }}>
-            <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-            {progress}% complete
-          </div>
+    <div className="relative" onMouseLeave={() => setOpen(false)}>
+      <button
+        onClick={(e) => { e.preventDefault(); setOpen((v) => !v) }}
+        className="w-8 h-8 rounded-lg grid place-items-center hover:bg-[var(--color-bg-subtle)] muted"
+        aria-label="Course actions"
+      >
+        <MoreVertical size={17} />
+      </button>
+      {open && (
+        <div className="dropdown-menu right-0 top-8" onClick={(e) => { e.preventDefault(); setOpen(false) }}>
+          <button className="dropdown-item w-[calc(100%-12px)]" onClick={() => toggleStar(course.id)}>
+            <Star size={15} /> {course.starred ? 'Unstar this course' : 'Star this course'}
+          </button>
+          <button className="dropdown-item w-[calc(100%-12px)]" onClick={() => toggleHidden(course.id)}>
+            {course.hidden ? <Eye size={15} /> : <EyeOff size={15} />} {course.hidden ? 'Restore to view' : 'Remove from view'}
+          </button>
         </div>
-      </Link>
+      )}
     </div>
+  )
+}
+
+export function CourseCard({ course }: { course: Course }) {
+  const completion = useLmsStore((s) => s.completion)
+  const p = courseProgress(course, completion)
+  return (
+    <Link to={`/courses/${course.id}`} className="card group overflow-hidden flex flex-col hover:-translate-y-0.5 transition-transform !text-inherit">
+      <CourseBanner course={course} className="h-28" />
+      <div className="p-4 flex-1 flex flex-col">
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium muted mb-1 flex items-center gap-1.5">
+              {course.starred && <Star size={12} fill="var(--color-amber)" color="var(--color-amber)" />}
+              {course.term}
+            </div>
+            <div className="font-semibold leading-snug line-clamp-2 group-hover:text-[var(--color-primary)]" style={{ color: 'var(--color-heading)' }}>
+              {course.shortName}-{course.fullName}
+            </div>
+          </div>
+          <CourseMenu course={course} />
+        </div>
+        <div className="mt-auto pt-4">
+          <div className="flex justify-between text-xs mb-1.5">
+            <span className="muted">{course.lecturer}</span>
+            <span className="font-semibold" style={{ color: 'var(--color-heading)' }}>{p}%</span>
+          </div>
+          <div className="progress-bar-container"><div className="progress-bar-fill" style={{ width: `${p}%` }} /></div>
+        </div>
+      </div>
+    </Link>
   )
 }

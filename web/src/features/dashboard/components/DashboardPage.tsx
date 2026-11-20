@@ -1,525 +1,269 @@
-import { useState, useRef } from 'react'
-import { AlignJustify, ChevronLeft, ChevronRight, ChevronDown, LayoutGrid, List, Clock, Users, Folder, Maximize2, Minimize2 } from 'lucide-react'
-import { useAuthStore } from '../../../store/authStore'
-import { CourseCard } from './CourseCard'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, LayoutGrid, List, AlignJustify, Search, BookOpen, CalendarClock, AlertTriangle, TrendingUp, ClipboardCheck, Clock } from 'lucide-react'
+import { useLmsStore, courseProgress, assignPhase, CURRENT_STUDENT_ID, STUDENTS, type Course } from '../../../store/lmsStore'
+import { useAuthStore } from '../../../store/authStore'
+import { useRole } from '../../../store/uiStore'
+import { fmtDay, fmtTime } from '../../../lib/format'
+import { CourseBanner, CourseCard, CourseMenu } from './CourseCard'
+import { MiniCalendar } from '../../calendar/components/MiniCalendar'
 
-// ─── Sample data (will be replaced by API calls) ──────────────────────────────
-const RECENT_COURSES = [
-  { id: 1, name: 'CS404.3-Parallel and Distributed Computing', code: 'CS404', semester: 'Year 4 — Semester 2', progress: 45 },
-  { id: 2, name: 'Special Award Project', code: 'SAP', semester: 'Year 4 — Semester 1', progress: 60 },
-]
+type Filter = 'all' | 'inprogress' | 'future' | 'past' | 'starred' | 'removed'
+type Sort = 'name' | 'access'
+type View = 'card' | 'list' | 'summary'
+type TlFilter = 'all' | 'overdue' | '7' | '30' | '90' | '180'
 
-const ALL_COURSES = [
-  { id: 3, name: 'BS401.3-Business Policy and Strategy', code: 'BS401', semester: 'Year 4 — Semester 1', progress: 70 },
-  { id: 4, name: 'BS402.3-Entrepreneurship', code: 'BS402', semester: 'Year 4 — Semester 2', progress: 28 },
-  { id: 5, name: 'Computer Networks', code: 'CN301', semester: 'Year 2 — Semester 1', progress: 13 },
-  { id: 6, name: 'CS101.3 Introduction to Computer Science', code: 'CS101', semester: 'Year 1 — Semester 1', progress: 80 },
-]
+const FILTERS: Record<Filter, string> = { all: 'All (except removed from view)', inprogress: 'In progress', future: 'Future', past: 'Past', starred: 'Starred', removed: 'Removed from view' }
+const TL_FILTERS: Record<TlFilter, string> = { all: 'All', overdue: 'Overdue', '7': 'Next 7 days', '30': 'Next 30 days', '90': 'Next 3 months', '180': 'Next 6 months' }
 
-const ONLINE_USERS = ['DVD Silva', 'GPAD Nilwala', 'KWKS Wijerathna', 'TDJ Pathirana', 'HN Kanakarathne']
+const isPast = (c: Course) => c.term.startsWith('Year 3')
 
-type Filter = 'inprogress' | 'all' | 'completed' | 'starred'
-type SortBy = 'coursename' | 'lastaccessed'
-type ViewType = 'card' | 'list'
-
-// ─── Block header (section title with collapse button) ─────────────────────────
-function BlockHeader({
-  icon,
-  title,
-  collapsed,
-  onToggle,
-}: {
-  icon?: React.ReactNode
-  title: string
-  collapsed: boolean
-  onToggle: () => void
-}) {
+function Stat({ icon: Icon, label, value, tone }: { icon: typeof BookOpen; label: string; value: string | number; tone: string }) {
   return (
-    <div className="block-section">
-      <div className="block-section-header">
-        <h3 className="block-section-title">
-          {icon && <span style={{ color: 'var(--color-text-muted)' }}>{icon}</span>}
-          {title}
-        </h3>
-        <button
-          onClick={onToggle}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--color-text-muted)',
-            display: 'flex',
-            padding: '2px',
-          }}
-          title={collapsed ? 'Expand' : 'Collapse'}
-        >
-          {collapsed ? <Maximize2 size={14} /> : <Minimize2 size={14} />}
-        </button>
+    <div className="card p-5 flex items-center gap-4">
+      <span className="w-12 h-12 rounded-2xl grid place-items-center" style={{ background: `color-mix(in srgb, ${tone} 14%, transparent)`, color: tone }}><Icon size={22} /></span>
+      <div>
+        <div className="text-2xl font-bold" style={{ color: 'var(--color-heading)' }}>{value}</div>
+        <div className="text-xs font-medium muted">{label}</div>
       </div>
     </div>
   )
 }
 
-// ─── Dropdown button (like NLearn's In progress / Course name / Card buttons) ──
-function DropdownBtn({
-  label,
-  icon,
-  options,
-  value,
-  onChange,
-}: {
-  label: string
-  icon?: React.ReactNode
-  options: { label: string; value: string }[]
-  value: string
-  onChange: (v: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
+function Select<T extends string>({ value, onChange, options, className = '!w-auto' }: { value: T; onChange: (v: T) => void; options: Record<T, string>; className?: string }) {
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="btn btn-secondary"
-        style={{ gap: '6px', fontSize: '13px', padding: '5px 12px' }}
-      >
-        {icon && <span style={{ display: 'flex' }}>{icon}</span>}
-        {options.find((o) => o.value === value)?.label ?? label}
-        <ChevronDown size={13} />
-      </button>
-      {open && (
-        <div
-          className="dropdown-menu"
-          style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 100 }}
-        >
-          {options.map((o) => (
-            <div
-              key={o.value}
-              className="dropdown-item"
-              style={{ fontWeight: o.value === value ? 600 : 400 }}
-              onClick={() => { onChange(o.value); setOpen(false) }}
-            >
-              {o.label}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <select value={value} onChange={(e) => onChange(e.target.value as T)} className={`form-control !h-9 pr-8 text-sm font-medium cursor-pointer ${className}`}>
+      {(Object.keys(options) as T[]).map((k) => <option key={k} value={k}>{options[k]}</option>)}
+    </select>
   )
 }
 
-// ─── Navigation block (right sidebar) ─────────────────────────────────────────
-function NavigationBlock() {
-  const [collapsed, setCollapsed] = useState(false)
-  const [myCoursesOpen, setMyCoursesOpen] = useState(true)
-
-  return (
-    <div style={{ marginBottom: '16px' }}>
-      <BlockHeader
-        icon={<Users size={16} />}
-        title="Navigation"
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
-      />
-      {!collapsed && (
-        <div style={{ fontSize: '13px', paddingLeft: '4px' }}>
-          <TreeLink label="Dashboard" to="/dashboard" />
-          <TreeLink label="Site home" to="/" />
-          <TreeExpand label="Site pages">
-            <TreeLink label="Calendar" to="/calendar" indent />
-          </TreeExpand>
-          <div>
-            <div
-              style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', padding: '3px 0' }}
-              onClick={() => setMyCoursesOpen((v) => !v)}
-            >
-              <span style={{ color: 'var(--color-text-muted)' }}>
-                {myCoursesOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              </span>
-              <span style={{ color: 'var(--color-text)', fontSize: '13px' }}>My courses</span>
-            </div>
-            {myCoursesOpen && (
-              <div style={{ paddingLeft: '14px' }}>
-                <TreeExpand label="Faculty of Computing">
-                  <TreeLink label="Year 4 — Semester 2" to="/courses/4" indent />
-                </TreeExpand>
-                <TreeExpand label="Faculty of Business">
-                  <TreeLink label="Year 4 — Semester 1" to="/courses/3" indent />
-                </TreeExpand>
-                <Link to="/courses" style={{ display: 'block', padding: '3px 0 3px 14px', color: 'var(--color-link)', fontSize: '13px' }}>
-                  More...
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function TreeLink({ label, to, indent }: { label: string; to: string; indent?: boolean }) {
-  return (
-    <Link
-      to={to}
-      style={{
-        display: 'block',
-        padding: `3px 0 3px ${indent ? '14px' : '14px'}`,
-        color: 'var(--color-link)',
-        fontSize: '13px',
-        textDecoration: 'none',
-      }}
-    >
-      {label}
-    </Link>
-  )
-}
-
-function TreeExpand({ label, children }: { label: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true)
-  return (
-    <div>
-      <div
-        style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', padding: '3px 0 3px 14px' }}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span style={{ color: 'var(--color-text-muted)' }}>
-          {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        </span>
-        <span style={{ color: 'var(--color-text)', fontSize: '13px' }}>{label}</span>
-      </div>
-      {open && <div style={{ paddingLeft: '14px' }}>{children}</div>}
-    </div>
-  )
-}
-
-// ─── Timeline block ────────────────────────────────────────────────────────────
-function TimelineBlock() {
-  const [collapsed, setCollapsed] = useState(false)
-
-  return (
-    <div style={{ marginBottom: '16px' }}>
-      <BlockHeader
-        icon={<Clock size={16} />}
-        title="Timeline"
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
-      />
-      {!collapsed && (
-        <div>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-            <DropdownBtn
-              label="Sort"
-              options={[{ label: 'Sort by dates', value: 'dates' }, { label: 'Sort by courses', value: 'courses' }]}
-              value="dates"
-              onChange={() => {}}
-            />
-            <DropdownBtn
-              label="All"
-              options={[{ label: 'All', value: 'all' }, { label: 'Overdue', value: 'overdue' }, { label: 'This week', value: 'week' }]}
-              value="all"
-              onChange={() => {}}
-            />
-          </div>
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '24px 0',
-              color: 'var(--color-text-muted)',
-              fontSize: '13px',
-            }}
-          >
-            No upcoming activities due
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Private files block ───────────────────────────────────────────────────────
-function PrivateFilesBlock() {
-  const [collapsed, setCollapsed] = useState(false)
-  return (
-    <div style={{ marginBottom: '16px' }}>
-      <BlockHeader
-        icon={<Folder size={16} />}
-        title="Private files"
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
-      />
-      {!collapsed && (
-        <div style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
-          No files available
-          <div style={{ marginTop: '6px' }}>
-            <Link to="/files" style={{ color: 'var(--color-link)', fontSize: '13px' }}>Manage private files...</Link>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Online users block ───────────────────────────────────────────────────────
-function OnlineUsersBlock() {
-  const [collapsed, setCollapsed] = useState(false)
-  return (
-    <div style={{ marginBottom: '16px' }}>
-      <BlockHeader
-        icon={<Users size={16} />}
-        title="Online users"
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
-      />
-      {!collapsed && (
-        <div>
-          <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>
-            {ONLINE_USERS.length} online users (last 5 minutes)
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {ONLINE_USERS.map((name) => (
-              <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div
-                  style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--color-green)',
-                    flexShrink: 0,
-                  }}
-                />
-                <span style={{ fontSize: '13px', color: 'var(--color-text)' }}>{name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user)
+  const { isTeacher } = useRole()
+  const courses = useLmsStore((s) => s.courses)
+  const completion = useLmsStore((s) => s.completion)
+  const submissions = useLmsStore((s) => s.submissions)
 
-  // Recently accessed
-  const [recentCollapsed, setRecentCollapsed] = useState(false)
-  const [recentIdx, setRecentIdx] = useState(0)
-
-  // Course overview
-  const [overviewCollapsed, setOverviewCollapsed] = useState(false)
   const [filter, setFilter] = useState<Filter>('inprogress')
-  const [sortBy, setSortBy] = useState<SortBy>('coursename')
-  const [viewType, setViewType] = useState<ViewType>('card')
+  const [sort, setSort] = useState<Sort>('name')
+  const [view, setView] = useState<View>('card')
+  const [search, setSearch] = useState('')
+  const [tlFilter, setTlFilter] = useState<TlFilter>('30')
+  const [tlSort, setTlSort] = useState<'dates' | 'courses'>('dates')
+  const scroller = useRef<HTMLDivElement>(null)
 
-  const filteredCourses = ALL_COURSES.filter((c) => {
-    if (filter === 'inprogress') return c.progress > 0 && c.progress < 100
-    if (filter === 'completed') return c.progress === 100
-    return true
-  }).sort((a, b) =>
-    sortBy === 'coursename' ? a.name.localeCompare(b.name) : b.id - a.id
-  )
+  const recent = [...courses].filter((c) => !c.hidden).sort((a, b) => b.lastAccess.localeCompare(a.lastAccess)).slice(0, 6)
+
+  const overview = useMemo(() => {
+    let list = courses.filter((c) => {
+      if (filter === 'removed') return c.hidden
+      if (c.hidden) return false
+      if (filter === 'inprogress') return !isPast(c)
+      if (filter === 'past') return isPast(c)
+      if (filter === 'future') return false
+      if (filter === 'starred') return c.starred
+      return true
+    })
+    const t = search.trim().toLowerCase()
+    if (t) list = list.filter((c) => `${c.shortName} ${c.fullName}`.toLowerCase().includes(t))
+    return list.sort((a, b) => (sort === 'name' ? a.fullName.localeCompare(b.fullName) : b.lastAccess.localeCompare(a.lastAccess)))
+  }, [courses, filter, sort, search])
+
+  const timeline = useMemo(() => {
+    const now = new Date()
+    const items: { id: number; course: Course; name: string; due: string; overdue: boolean; action: string }[] = []
+    courses.forEach((c) => {
+      if (c.hidden || isPast(c)) return
+      c.sections.forEach((s) => s.activities.forEach((a) => {
+        if (a.type !== 'assign' || !a.visible || !a.assign?.dueDate) return
+        const phase = assignPhase(a.assign, now)
+        if (phase === 'closed' || phase === 'disabled') return
+        if (isTeacher) {
+          const pending = STUDENTS.filter((st) => { const sb = submissions[`${a.id}:${st.id}`]; return sb?.status === 'submitted' && sb.grade === null }).length
+          if (!pending) return
+          items.push({ id: a.id, course: c, name: a.name, due: a.assign.dueDate, overdue: false, action: `Grade (${pending})` })
+          return
+        }
+        if (submissions[`${a.id}:${CURRENT_STUDENT_ID}`]?.status === 'submitted') return
+        items.push({ id: a.id, course: c, name: a.name, due: a.assign.dueDate, overdue: phase === 'overdue', action: 'Add submission' })
+      }))
+    })
+    const filtered = items.filter((i) => {
+      if (tlFilter === 'overdue') return i.overdue
+      if (tlFilter === 'all') return true
+      return i.overdue || new Date(i.due).getTime() - now.getTime() <= Number(tlFilter) * 86_400_000
+    })
+    return filtered.sort((a, b) => (tlSort === 'dates' ? a.due.localeCompare(b.due) : a.course.fullName.localeCompare(b.course.fullName) || a.due.localeCompare(b.due)))
+  }, [courses, submissions, tlFilter, tlSort, isTeacher])
+
+  const active = courses.filter((c) => !c.hidden && !isPast(c))
+  const avg = active.length ? Math.round(active.reduce((n, c) => n + courseProgress(c, completion), 0) / active.length) : 0
+  const dueWeek = timeline.filter((i) => !i.overdue && new Date(i.due).getTime() - Date.now() < 7 * 86_400_000).length
+  const overdue = timeline.filter((i) => i.overdue).length
+  const hour = new Date().getHours()
+  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+
+  const grouped = useMemo(() => {
+    const m = new Map<string, typeof timeline>()
+    timeline.forEach((i) => {
+      const k = tlSort === 'dates' ? (i.overdue ? 'Overdue' : fmtDay(i.due)) : `${i.course.shortName}-${i.course.fullName}`
+      m.set(k, [...(m.get(k) ?? []), i])
+    })
+    return [...m.entries()]
+  }, [timeline, tlSort])
 
   return (
-    <div
-      style={{
-        padding: '16px',
-        maxWidth: '1200px',
-        margin: '0 auto',
-        display: 'flex',
-        gap: '20px',
-        alignItems: 'flex-start',
-      }}
-    >
-      {/* ── Left main column ─────────────────────────── */}
-      <div style={{ flex: '1 1 0', minWidth: 0 }}>
+    <div className="space-y-8">
+      <div className="relative overflow-hidden rounded-3xl p-7 lg:p-9 text-white" style={{ background: 'linear-gradient(120deg,#1A3C8F 0%,#2554C7 55%,#00B3A1 130%)' }}>
+        <div className="absolute -right-10 -top-16 w-72 h-72 rounded-full bg-white/10" />
+        <div className="absolute right-40 -bottom-24 w-56 h-56 rounded-full bg-white/5" />
+        <div className="relative">
+          <div className="text-sm font-medium text-white/80">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+          <h1 className="!text-white text-2xl lg:text-3xl font-bold mt-1">{greet}, {user?.fullName?.split(' ')[0] ?? 'there'} 👋</h1>
+          <p className="text-white/80 mt-2 max-w-xl">
+            {isTeacher ? `You have ${timeline.length} assignment${timeline.length === 1 ? '' : 's'} waiting for grading.` : `You have ${dueWeek} activit${dueWeek === 1 ? 'y' : 'ies'} due this week${overdue ? ` and ${overdue} overdue` : ''}. Keep it up!`}
+          </p>
+        </div>
+      </div>
 
-        {/* ── Recently accessed courses ──────────────── */}
-        <BlockHeader
-          icon={<AlignJustify size={16} />}
-          title="Recently accessed courses"
-          collapsed={recentCollapsed}
-          onToggle={() => setRecentCollapsed((v) => !v)}
-        />
-        {!recentCollapsed && (
-          <div style={{ position: 'relative', marginBottom: '24px' }}>
-            {/* Carousel */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                gap: '12px',
-              }}
-            >
-              {RECENT_COURSES.map((c) => (
-                <CourseCard key={c.id} {...c} />
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <Stat icon={BookOpen} label="Courses in progress" value={active.length} tone="#2554C7" />
+        <Stat icon={isTeacher ? ClipboardCheck : CalendarClock} label={isTeacher ? 'To grade' : 'Due in 7 days'} value={isTeacher ? timeline.length : dueWeek} tone="#0D9488" />
+        <Stat icon={AlertTriangle} label="Overdue" value={overdue} tone="#DC2626" />
+        <Stat icon={TrendingUp} label="Average progress" value={`${avg}%`} tone="#7C3AED" />
+      </div>
+
+      <div className="grid xl:grid-cols-[minmax(0,1fr)_360px] gap-8">
+        <div className="space-y-8 min-w-0">
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold">Recently accessed courses</h2>
+              <div className="flex gap-1">
+                <button className="icon-btn !w-9 !h-9 card" onClick={() => scroller.current?.scrollBy({ left: -320, behavior: 'smooth' })} aria-label="Previous"><ChevronLeft size={18} /></button>
+                <button className="icon-btn !w-9 !h-9 card" onClick={() => scroller.current?.scrollBy({ left: 320, behavior: 'smooth' })} aria-label="Next"><ChevronRight size={18} /></button>
+              </div>
+            </div>
+            <div ref={scroller} className="flex gap-4 overflow-x-auto snap-x pb-2 -mx-1 px-1 [scrollbar-width:none]">
+              {recent.map((c) => (
+                <Link key={c.id} to={`/courses/${c.id}`} className="card overflow-hidden shrink-0 w-[260px] snap-start hover:-translate-y-0.5 transition-transform !text-inherit">
+                  <CourseBanner course={c} className="h-24" />
+                  <div className="p-4">
+                    <div className="text-xs muted mb-1">{c.term}</div>
+                    <div className="font-semibold text-sm line-clamp-2" style={{ color: 'var(--color-heading)' }}>{c.shortName}-{c.fullName}</div>
+                  </div>
+                </Link>
               ))}
             </div>
-            {/* Prev/next arrows */}
-            <button
-              onClick={() => setRecentIdx((v) => Math.max(0, v - 1))}
-              style={{
-                position: 'absolute',
-                right: '36px',
-                top: '-32px',
-                background: 'none',
-                border: '1px solid var(--color-border)',
-                borderRadius: '3px',
-                width: '24px',
-                height: '24px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--color-text)',
-              }}
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <button
-              onClick={() => setRecentIdx((v) => v + 1)}
-              style={{
-                position: 'absolute',
-                right: '8px',
-                top: '-32px',
-                background: 'none',
-                border: '1px solid var(--color-border)',
-                borderRadius: '3px',
-                width: '24px',
-                height: '24px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--color-text)',
-              }}
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        )}
+          </section>
 
-        {/* ── Course overview ────────────────────────── */}
-        <BlockHeader
-          icon={<AlignJustify size={16} />}
-          title="Course overview"
-          collapsed={overviewCollapsed}
-          onToggle={() => setOverviewCollapsed((v) => !v)}
-        />
-        {!overviewCollapsed && (
-          <>
-            {/* Toolbar */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '16px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <DropdownBtn
-                label="In progress"
-                icon={<span style={{ fontSize: '12px' }}>▼</span>}
-                options={[
-                  { label: 'All', value: 'all' },
-                  { label: 'In progress', value: 'inprogress' },
-                  { label: 'Completed', value: 'completed' },
-                  { label: 'Starred', value: 'starred' },
-                ]}
-                value={filter}
-                onChange={(v) => setFilter(v as Filter)}
-              />
-              <div style={{ flex: 1 }} />
-              <DropdownBtn
-                label="Course name"
-                icon={<List size={13} />}
-                options={[
-                  { label: 'Course name', value: 'coursename' },
-                  { label: 'Last accessed', value: 'lastaccessed' },
-                ]}
-                value={sortBy}
-                onChange={(v) => setSortBy(v as SortBy)}
-              />
-              <DropdownBtn
-                label="Card"
-                icon={<LayoutGrid size={13} />}
-                options={[
-                  { label: 'Card', value: 'card' },
-                  { label: 'List', value: 'list' },
-                ]}
-                value={viewType}
-                onChange={(v) => setViewType(v as ViewType)}
-              />
-            </div>
-
-            {/* Course grid / list */}
-            {filteredCourses.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-muted)', fontSize: '14px' }}>
-                No courses match the selected filter.
+          <section>
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <h2 className="text-lg font-bold mr-auto">Course overview</h2>
+              <Select value={filter} onChange={setFilter} options={FILTERS} />
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 muted" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" className="form-control !h-9 pl-9 !w-44" />
               </div>
-            ) : viewType === 'card' ? (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                  gap: '14px',
-                  marginBottom: '24px',
-                }}
-              >
-                {filteredCourses.map((c) => (
-                  <CourseCard key={c.id} {...c} />
+              <Select value={sort} onChange={setSort} options={{ name: 'Sort by course name', access: 'Sort by last accessed' }} />
+              <div className="flex p-1 rounded-xl" style={{ background: 'var(--color-bg-subtle)' }}>
+                {([['card', LayoutGrid], ['list', List], ['summary', AlignJustify]] as const).map(([v, Icon]) => (
+                  <button key={v} onClick={() => setView(v)} title={v[0].toUpperCase() + v.slice(1)}
+                    className={`w-8 h-7 rounded-lg grid place-items-center ${view === v ? 'bg-[var(--color-bg-card)] shadow-sm text-[var(--color-primary)]' : 'muted'}`}>
+                    <Icon size={16} />
+                  </button>
                 ))}
               </div>
+            </div>
+
+            {overview.length === 0 ? (
+              <div className="card p-12 text-center">
+                <BookOpen size={36} className="mx-auto muted" />
+                <div className="mt-3 font-semibold" style={{ color: 'var(--color-heading)' }}>No courses</div>
+                <div className="text-sm muted">There are no courses matching “{FILTERS[filter]}”.</div>
+              </div>
+            ) : view === 'card' ? (
+              <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-5">{overview.map((c) => <CourseCard key={c.id} course={c} />)}</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
-                {filteredCourses.map((c) => (
-                  <div
-                    key={c.id}
-                    className="card"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      padding: '10px 14px',
-                      border: '1px solid var(--color-border-card)',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '48px',
-                        height: '48px',
-                        borderRadius: '4px',
-                        background: `linear-gradient(135deg, #1976D2 0%, #0D47A1 100%)`,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{c.semester}</div>
-                      <div style={{ fontSize: '14px', color: 'var(--color-heading)', fontWeight: 500 }}>{c.name}</div>
-                      <div className="progress-bar-container" style={{ marginTop: '6px', maxWidth: '200px' }}>
-                        <div className="progress-bar-fill" style={{ width: `${c.progress}%` }} />
+              <div className="card divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                {overview.map((c) => {
+                  const p = courseProgress(c, completion)
+                  return (
+                    <div key={c.id} className="flex items-center gap-4 p-4 hover:bg-[var(--color-bg-card-hover)] first:rounded-t-2xl last:rounded-b-2xl" style={{ borderColor: 'var(--color-border)' }}>
+                      <CourseBanner course={c} className={`${view === 'summary' ? 'w-24 h-24' : 'w-14 h-14'} rounded-xl shrink-0`} />
+                      <Link to={`/courses/${c.id}`} className="flex-1 min-w-0 !text-inherit">
+                        <div className="text-xs muted">{c.term} · {c.category}</div>
+                        <div className="font-semibold truncate" style={{ color: 'var(--color-heading)' }}>{c.shortName}-{c.fullName}</div>
+                        {view === 'summary' && <p className="text-sm muted mt-1 line-clamp-2">Lecturer: {c.lecturer}. This module covers the core concepts of {c.fullName.toLowerCase()} with lectures, tutorials and a graded assignment.</p>}
+                      </Link>
+                      <div className="w-36 hidden sm:block">
+                        <div className="text-xs text-right mb-1 font-semibold" style={{ color: 'var(--color-heading)' }}>{p}% complete</div>
+                        <div className="progress-bar-container"><div className="progress-bar-fill" style={{ width: `${p}%` }} /></div>
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                        {c.progress}% complete
-                      </div>
+                      <CourseMenu course={c} />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <aside className="space-y-6">
+          <section className="card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold flex items-center gap-2"><Clock size={18} style={{ color: 'var(--color-primary)' }} /> Timeline</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <Select value={tlFilter} onChange={setTlFilter} options={TL_FILTERS} className="min-w-0" />
+              <Select value={tlSort} onChange={setTlSort} options={{ dates: 'Sort by dates', courses: 'Sort by courses' }} className="min-w-0" />
+            </div>
+            {grouped.length === 0 ? (
+              <div className="text-center py-8">
+                <CalendarClock size={32} className="mx-auto muted" />
+                <div className="text-sm muted mt-2">No activities require action</div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {grouped.map(([day, items]) => (
+                  <div key={day}>
+                    <div className={`text-xs font-bold uppercase tracking-wider mb-2 ${day === 'Overdue' ? '' : 'muted'}`} style={day === 'Overdue' ? { color: 'var(--color-red)' } : {}}>{day}</div>
+                    <div className="space-y-2">
+                      {items.map((i) => (
+                        <div key={i.id} className="flex items-start gap-3 p-3 rounded-xl" style={{ background: 'var(--color-bg-subtle)' }}>
+                          <span className="text-xs font-semibold mt-0.5 w-14 shrink-0" style={{ color: i.overdue ? 'var(--color-red)' : 'var(--color-heading)' }}>{fmtTime(i.due)}</span>
+                          <div className="flex-1 min-w-0">
+                            <Link to={`/courses/${i.course.id}/assign/${i.id}`} className="font-medium text-sm block truncate" style={{ color: 'var(--color-heading)' }}>{i.name}</Link>
+                            <div className="text-xs muted truncate">Assignment is due · {i.course.shortName}</div>
+                            <Link to={`/courses/${i.course.id}/assign/${i.id}`} className="btn btn-secondary btn-sm mt-2">{i.action}</Link>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </>
-        )}
-      </div>
+          </section>
 
-      {/* ── Right sidebar ─────────────────────────────── */}
-      <div style={{ width: '220px', flexShrink: 0 }}>
-        <NavigationBlock />
-        <TimelineBlock />
-        <PrivateFilesBlock />
-        <OnlineUsersBlock />
+          <MiniCalendar />
+
+          <section className="card p-5">
+            <h2 className="font-bold mb-1">Online users</h2>
+            <div className="text-xs muted mb-3">{STUDENTS.length - 1} online users (last 5 minutes)</div>
+            <div className="space-y-2.5">
+              {STUDENTS.slice(0, 5).map((s) => (
+                <div key={s.id} className="flex items-center gap-2.5 text-sm">
+                  <span className="relative w-7 h-7 rounded-full grid place-items-center text-[10px] font-bold" style={{ background: 'var(--color-bg-subtle)', color: 'var(--color-heading)' }}>
+                    {s.name.split(' ').map((p) => p[0]).join('').slice(0, 2)}
+                    <span className="absolute -right-0.5 -bottom-0.5 w-2.5 h-2.5 rounded-full border-2" style={{ background: 'var(--color-green)', borderColor: 'var(--color-bg-card)' }} />
+                  </span>
+                  <span style={{ color: 'var(--color-heading)' }}>{s.name}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </aside>
       </div>
     </div>
   )
