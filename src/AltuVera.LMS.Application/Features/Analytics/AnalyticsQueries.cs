@@ -70,7 +70,7 @@ internal static class RiskEngine
                 var late = mySubs.Count(s => s.Status == "submitted" && s.ModifiedAt != null && assigns.Any(x => x.a.Id == s.ActivityId && x.s.DueDate != null && s.ModifiedAt > x.s.DueDate));
                 var submitted = mySubs.Count(s => s.Status == "submitted");
 
-                var quizScores = quizzes.Select(q => attempts.Where(t => t.ActivityId == q.a.Id && t.UserId == sid && t.Score != null).Select(t => (decimal)t.Score!.Value / QuizRulesPublic.Questions * 100).DefaultIfEmpty(-1).Max()).Where(v => v >= 0).ToList();
+                var quizScores = quizzes.Select(q => attempts.Where(t => t.ActivityId == q.a.Id && t.UserId == sid && t.Score != null).Select(t => (decimal)t.Score!.Value / Math.Max(1, t.MaxScore) * 100).DefaultIfEmpty(-1).Max()).Where(v => v >= 0).ToList();
                 var missedQuizzes = quizzes.Count(q => q.s.CloseDate != null && q.s.CloseDate < now && !attempts.Any(t => t.ActivityId == q.a.Id && t.UserId == sid));
                 decimal? quizAvg = quizScores.Count > 0 ? Math.Round(quizScores.Average(), 1) : null;
 
@@ -105,8 +105,6 @@ internal static class RiskEngine
         return result.OrderByDescending(r => r.RiskScore).ThenBy(r => r.Name).ToList();
     }
 }
-
-internal static class QuizRulesPublic { public const int Questions = 5; }
 
 public record AtRiskQuery(int? CourseId) : IRequest<object>;
 

@@ -144,61 +144,6 @@ public class ToggleDiscussionStarHandler(IApplicationDbContext db, ICurrentUserS
     }
 }
 
-// ── Quizzes ──────────────────────────────────────────────────────────────────
-
-public record QuizSettings(DateTime? OpenDate, DateTime? CloseDate, int TimeLimitMins, int AttemptsAllowed, string GradingMethod, decimal MaxGrade, bool ReviewAfterClose);
-
-internal static class QuizRules
-{
-    public static readonly int[] AnswerKey = [1, 0, 1, 2, 1];
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
-    public static async Task<QuizSettings> LoadAsync(IApplicationDbContext db, int activityId, CancellationToken ct)
-    {
-        var json = await db.Activities.AsNoTracking().Where(a => a.Id == activityId && a.Type == "quiz").Select(a => a.QuizJson).FirstOrDefaultAsync(ct) ?? throw new NotFoundException("Quiz not found");
-        return JsonSerializer.Deserialize<QuizSettings>(json, Json)!;
-    }
-}
-
-public record StartQuizAttemptCommand(int QuizId) : IRequest<object>;
-
-public class StartQuizAttemptHandler(IApplicationDbContext db, ICurrentUserService user) : IRequestHandler<StartQuizAttemptCommand, object>
-{
-    public async Task<object> Handle(StartQuizAttemptCommand c, CancellationToken ct)
-    {
-        await db.EnsureStudentCanActAsync(user, c.QuizId, ct);
-        var s = await QuizRules.LoadAsync(db, c.QuizId, ct);
-        var now = DateTime.UtcNow;
-        if (s.OpenDate is not null && now < s.OpenDate) throw new BusinessRuleException("This quiz is not open yet.");
-        if (s.CloseDate is not null && now > s.CloseDate) throw new BusinessRuleException("This quiz has closed.");
-        var used = await db.QuizAttempts.CountAsync(a => a.ActivityId == c.QuizId && a.UserId == user.UserId && a.FinishedAt != null, ct);
-        if (s.AttemptsAllowed > 0 && used >= s.AttemptsAllowed) throw new BusinessRuleException("No more attempts are allowed.");
-        var open = await db.QuizAttempts.FirstOrDefaultAsync(a => a.ActivityId == c.QuizId && a.UserId == user.UserId && a.FinishedAt == null, ct);
-        if (open is null) { open = new QuizAttempt { ActivityId = c.QuizId, UserId = user.UserId }; db.QuizAttempts.Add(open); await db.SaveChangesAsync(ct); }
-        return new { id = open.Id, userId = open.UserId, startedAt = open.StartedAt, finishedAt = (DateTime?)null, answers = new Dictionary<string, int>(), score = (int?)null };
-    }
-}
-
-public record FinishQuizAttemptCommand(int AttemptId, Dictionary<string, int> Answers) : IRequest<int>;
-
-public class FinishQuizAttemptHandler(IApplicationDbContext db, ICurrentUserService user) : IRequestHandler<FinishQuizAttemptCommand, int>
-{
-    public async Task<int> Handle(FinishQuizAttemptCommand c, CancellationToken ct)
-    {
-        var a = await db.QuizAttempts.FindAsync([c.AttemptId], ct) ?? throw new NotFoundException("Attempt not found");
-        if (a.UserId != user.UserId) throw new ForbiddenAccessException();
-        if (a.FinishedAt is not null) return a.Score ?? 0;
-        var s = await QuizRules.LoadAsync(db, a.ActivityId, ct);
-        var answers = c.Answers.Where(kv => int.TryParse(kv.Key, out var i) && i >= 0 && i < QuizRules.AnswerKey.Length).ToDictionary(kv => kv.Key, kv => kv.Value);
-        var deadline = a.StartedAt.AddMinutes(s.TimeLimitMins + 1);
-        a.FinishedAt = DateTime.UtcNow > deadline ? deadline : DateTime.UtcNow;
-        a.AnswersJson = JsonSerializer.Serialize(answers);
-        a.Score = answers.Count(kv => QuizRules.AnswerKey[int.Parse(kv.Key)] == kv.Value);
-        await db.SaveChangesAsync(ct);
-        return a.Score.Value;
-    }
-}
-
 // ── Feedback ─────────────────────────────────────────────────────────────────
 
 public record SubmitFeedbackCommand(int FeedbackId, JsonElement Answers) : IRequest;

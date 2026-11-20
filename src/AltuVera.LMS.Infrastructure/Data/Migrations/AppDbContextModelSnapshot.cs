@@ -365,6 +365,50 @@ namespace AltuVera.LMS.Infrastructure.Data.Migrations
                     b.ToTable("FeedbackResponses");
                 });
 
+            modelBuilder.Entity("AltuVera.LMS.Domain.Entities.Assessment.Question", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("CorrectIndex")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CourseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Explanation")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OptionsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseId", "Category");
+
+                    b.ToTable("Questions");
+                });
+
             modelBuilder.Entity("AltuVera.LMS.Domain.Entities.Assessment.QuizAttempt", b =>
                 {
                     b.Property<int>("Id")
@@ -382,6 +426,12 @@ namespace AltuVera.LMS.Infrastructure.Data.Migrations
 
                     b.Property<DateTime?>("FinishedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("LayoutJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("MaxScore")
+                        .HasColumnType("int");
 
                     b.Property<int?>("Score")
                         .HasColumnType("int");

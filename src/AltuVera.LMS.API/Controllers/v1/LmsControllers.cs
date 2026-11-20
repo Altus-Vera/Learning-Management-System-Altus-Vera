@@ -143,7 +143,31 @@ public class ActivitiesController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> StartAttempt(int id, CancellationToken ct) => Ok(await mediator.Send(new StartQuizAttemptCommand(id), ct));
 
     [HttpPost("quiz-attempts/{id:int}/finish")]
-    public async Task<IActionResult> FinishAttempt(int id, [FromBody] AnswersBody b, CancellationToken ct) => Ok(new { score = await mediator.Send(new FinishQuizAttemptCommand(id, b.Answers), ct) });
+    public async Task<IActionResult> FinishAttempt(int id, [FromBody] AnswersBody b, CancellationToken ct) => Ok(await mediator.Send(new FinishQuizAttemptCommand(id, b.Answers), ct));
+
+    [HttpGet("quiz-attempts/{id:int}")]
+    public async Task<IActionResult> ReviewAttempt(int id, CancellationToken ct) => Ok(await mediator.Send(new GetAttemptReviewQuery(id), ct));
+
+    [HttpGet("quizzes/{id:int}/item-data")]
+    public async Task<IActionResult> ItemData(int id, CancellationToken ct) => Ok(await mediator.Send(new GetQuizItemDataQuery(id), ct));
+
+    public record QuestionBody(string Category, string Text, string[] Options, int CorrectIndex, string? Explanation);
+    public record ImportBody(string Category, string Text);
+
+    [HttpGet("courses/{courseId:int}/questions")]
+    public async Task<IActionResult> Questions(int courseId, CancellationToken ct) => Ok(await mediator.Send(new GetQuestionBankQuery(courseId), ct));
+
+    [HttpPost("courses/{courseId:int}/questions")]
+    public async Task<IActionResult> AddQuestion(int courseId, [FromBody] QuestionBody b, CancellationToken ct) => Ok(new { id = await mediator.Send(new SaveQuestionCommand(null, courseId, b.Category, b.Text, b.Options, b.CorrectIndex, b.Explanation), ct) });
+
+    [HttpPut("courses/{courseId:int}/questions/{id:int}")]
+    public async Task<IActionResult> UpdateQuestion(int courseId, int id, [FromBody] QuestionBody b, CancellationToken ct) { await mediator.Send(new SaveQuestionCommand(id, courseId, b.Category, b.Text, b.Options, b.CorrectIndex, b.Explanation), ct); return NoContent(); }
+
+    [HttpDelete("questions/{id:int}")]
+    public async Task<IActionResult> DeleteQuestion(int id, CancellationToken ct) { await mediator.Send(new DeleteQuestionCommand(id), ct); return NoContent(); }
+
+    [HttpPost("courses/{courseId:int}/questions/import")]
+    public async Task<IActionResult> ImportQuestions(int courseId, [FromBody] ImportBody b, CancellationToken ct) => Ok(new { imported = await mediator.Send(new ImportQuestionsCommand(courseId, b.Category, b.Text), ct) });
 
     [HttpPost("feedback/{id:int}/responses")]
     public async Task<IActionResult> SubmitFeedback(int id, [FromBody] JsonElement answers, CancellationToken ct) { await mediator.Send(new SubmitFeedbackCommand(id, answers), ct); return NoContent(); }

@@ -31,6 +31,7 @@ public interface IApplicationDbContext
     DbSet<SubmissionFile> SubmissionFiles { get; }
     DbSet<SubmissionComment> SubmissionComments { get; }
     DbSet<QuizAttempt> QuizAttempts { get; }
+    DbSet<Question> Questions { get; }
     DbSet<FeedbackResponse> FeedbackResponses { get; }
     DbSet<ChoiceGroup> ChoiceGroups { get; }
     DbSet<ChoiceGroupMember> ChoiceGroupMembers { get; }

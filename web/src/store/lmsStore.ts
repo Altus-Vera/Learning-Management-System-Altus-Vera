@@ -12,6 +12,11 @@ export interface QuizSettings {
   gradingMethod: 'Highest grade' | 'Average grade' | 'First attempt' | 'Last attempt'
   maxGrade: number
   reviewAfterClose: boolean
+  /** Questions drawn from the bank per attempt; 0 means every matching question. */
+  questionCount: number
+  category: string
+  shuffleQuestions: boolean
+  shuffleAnswers: boolean
 }
 
 export interface AssignSettings {
@@ -82,7 +87,7 @@ export let CURRENT_STUDENT_ID = ''
 export const setCurrentUserId = (id: string) => { CURRENT_STUDENT_ID = id }
 
 export const quizDefaults = (p: Partial<QuizSettings> = {}): QuizSettings => ({
-  openDate: null, closeDate: null, timeLimitMins: 30, attemptsAllowed: 1, gradingMethod: 'Highest grade', maxGrade: 10, reviewAfterClose: true, ...p,
+  openDate: null, closeDate: null, timeLimitMins: 30, attemptsAllowed: 1, gradingMethod: 'Highest grade', maxGrade: 10, reviewAfterClose: true, questionCount: 0, category: 'All', shuffleQuestions: true, shuffleAnswers: true, ...p,
 })
 
 interface LmsState {

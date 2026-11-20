@@ -12,6 +12,8 @@ import { CourseGrades } from '../../grades/components/GradesPage'
 import { useActivityStore, seedGroups } from '../../../store/activityStore'
 import { useAuthStore } from '../../../store/authStore'
 import { ActivityIndex } from './ActivityIndex'
+import { QuestionBank } from '../../activities/QuestionBank'
+import { Database } from 'lucide-react'
 import { useAdminStore, useEnrolled, useCourseIdOfActivity, useBlockState, enrolledIds } from '../../../store/adminStore'
 import { Ban } from 'lucide-react'
 
@@ -303,13 +305,13 @@ export function CoursePage() {
           )}
         </div>
         <div className="flex gap-1 px-4 border-t overflow-x-auto" style={{ borderColor: 'var(--color-border)' }}>
-          {([['course', 'Course', BookOpen], ['participants', 'Participants', Users], ['grades', 'Grades', GraduationCap], ['assign', 'Assignments', ClipboardCheck], ['quiz', 'Quizzes', ListChecks], ['forum', 'Forums', MessagesSquare], ['choice', 'Group choices', Vote], ['resource', 'Resources', FileText], ['badges', 'Badges', Award]] as const).map(([k, l, Icon]) => (
+          {([['course', 'Course', BookOpen], ['participants', 'Participants', Users], ['grades', 'Grades', GraduationCap], ['assign', 'Assignments', ClipboardCheck], ['quiz', 'Quizzes', ListChecks], ['forum', 'Forums', MessagesSquare], ['choice', 'Group choices', Vote], ['resource', 'Resources', FileText], ['badges', 'Badges', Award], ['questions', 'Question bank', Database]] as const).filter(([k]) => k !== 'questions' || isTeacher).map(([k, l, Icon]) => (
             <button key={k} onClick={() => setTab(k)} className={`tab flex items-center gap-2 ${tab === k ? 'tab-active' : ''}`}><Icon size={16} />{l}</button>
           ))}
         </div>
       </div>
 
-      {!isTeacher && (block.blocked || !enrolledHere) ? <RestrictedCourse reason={block.blocked ? block.reason! : 'You are not enrolled in this course.'} /> : ['assign', 'quiz', 'forum', 'choice', 'resource', 'badges'].includes(tab) ? <ActivityIndex course={course} kind={tab as 'assign'} /> : tab === 'participants' ? <Participants course={course} /> : tab === 'grades' ? <CourseGrades course={course} /> : (
+      {!isTeacher && (block.blocked || !enrolledHere) ? <RestrictedCourse reason={block.blocked ? block.reason! : 'You are not enrolled in this course.'} /> : tab === 'questions' && isTeacher ? <QuestionBank course={course} /> : ['assign', 'quiz', 'forum', 'choice', 'resource', 'badges'].includes(tab) ? <ActivityIndex course={course} kind={tab as 'assign'} /> : tab === 'participants' ? <Participants course={course} /> : tab === 'grades' ? <CourseGrades course={course} /> : (
         <div className="grid xl:grid-cols-[260px_minmax(0,1fr)] gap-6">
           <aside className="hidden xl:block">
             <div className="card p-4 sticky top-24">

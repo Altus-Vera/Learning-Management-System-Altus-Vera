@@ -42,6 +42,21 @@ public class QuizAttempt : BaseEntity
     public DateTime? FinishedAt { get; set; }
     public string AnswersJson { get; set; } = "{}";
     public int? Score { get; set; }
+    public int MaxScore { get; set; } = 5;
+    /// The paper this attempt received: question ids in display order, each with its option display order.
+    public string? LayoutJson { get; set; }
+}
+
+public class Question : BaseEntity
+{
+    public int CourseId { get; set; }
+    public string Category { get; set; } = "General";
+    public string Text { get; set; } = string.Empty;
+    public string OptionsJson { get; set; } = "[]";
+    public int CorrectIndex { get; set; }
+    public string? Explanation { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class FeedbackResponse : BaseEntity

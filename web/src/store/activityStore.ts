@@ -6,18 +6,18 @@ import { call } from '../services/sync'
 
 export interface ForumPost { id: number; parentId: number | null; authorId: string; author: string; message: string; at: string }
 export interface Discussion { id: number; subject: string; authorId: string; author: string; createdAt: string; pinned: boolean; locked: boolean; posts: ForumPost[] }
-export interface QuizAttempt { id: number; userId: string; startedAt: string; finishedAt: string | null; answers: Record<number, number>; score: number | null }
+export interface QuizAttempt {
+  id: number; userId: string; startedAt: string; finishedAt: string | null
+  /** Question id → chosen option (original order); empty until finished. */
+  answers: Record<string, number>
+  score: number | null
+  maxScore: number
+  /** The drawn paper, only present on the attempt returned when starting. */
+  questions?: { id: number; text: string; options: string[] }[]
+}
 export interface FeedbackResponse { at: string; answers: Record<string, number | string> }
 export interface ChoiceGroup { id: number; name: string; description: string; capacity: number; members: string[] }
 export interface Comment { id: number; authorId: string; author: string; text: string; at: string }
-
-export const QUIZ_QUESTIONS = [
-  { q: 'Which of the following best describes a SWOT analysis?', o: ['A financial forecasting model', 'An assessment of strengths, weaknesses, opportunities and threats', 'A pricing strategy', 'A marketing channel'], a: 1 },
-  { q: 'Porter’s Five Forces is primarily used to analyse…', o: ['Industry competitiveness', 'Employee motivation', 'Cash flow', 'Product design'], a: 0 },
-  { q: 'A mission statement describes…', o: ['Quarterly targets', 'The organisation’s fundamental purpose', 'Tax obligations', 'Board composition'], a: 1 },
-  { q: 'Which strategy focuses on offering products at the lowest cost in the industry?', o: ['Differentiation', 'Focus', 'Cost leadership', 'Diversification'], a: 2 },
-  { q: 'PESTEL analysis examines the…', o: ['Internal resources', 'External macro environment', 'Competitor pricing', 'Supply chain costs'], a: 1 },
-]
 
 export const FEEDBACK_QUESTIONS = [
   { id: 'q1', text: 'The lecturer explained the subject matter clearly.', type: 'rating' as const },
@@ -56,7 +56,7 @@ interface ActivityState {
   toggleStarDiscussion: (discussionId: number) => void
 
   startAttempt: (quizId: number) => Promise<QuizAttempt | undefined>
-  finishAttempt: (quizId: number, attemptId: number, answers: Record<number, number>) => Promise<void>
+  finishAttempt: (quizId: number, attemptId: number, answers: Record<string, number>) => Promise<void>
 
   submitFeedback: (feedbackId: number, answers: Record<string, number | string>) => Promise<boolean>
   joinGroup: (choiceId: number, groupId: number | null) => Promise<boolean>

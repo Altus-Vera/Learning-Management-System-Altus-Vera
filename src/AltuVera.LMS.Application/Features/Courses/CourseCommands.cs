@@ -92,7 +92,7 @@ public class AddActivityHandler(IApplicationDbContext db, ICurrentUserService us
             SectionId = c.SectionId, SortOrder = order + 1, Type = c.Type, Name = c.Name.Trim(), Visible = true, Description = "",
             Content = c.Type is "page" or "label" ? c.Name.Trim() : null,
             AssignJson = c.Type == "assign" ? JsonSerializer.Serialize(new { allowSubmissionsFrom = now, dueDate = now.AddDays(7), cutOffDate = now.AddDays(9), remindToGradeBy = now.AddDays(14), acceptingSubmissions = true, fileSubmissions = true, onlineText = false, maxFiles = 1, maxSizeMb = 20, acceptedTypes = ".pdf,.docx,.pptx,.zip", requireSubmitButton = true, maxGrade = 100 }) : null,
-            QuizJson = c.Type == "quiz" ? JsonSerializer.Serialize(new { openDate = now, closeDate = now.AddDays(6), timeLimitMins = 30, attemptsAllowed = 1, gradingMethod = "Highest grade", maxGrade = 10, reviewAfterClose = true }) : null,
+            QuizJson = c.Type == "quiz" ? JsonSerializer.Serialize(new { openDate = now, closeDate = now.AddDays(6), timeLimitMins = 30, attemptsAllowed = 1, gradingMethod = "Highest grade", maxGrade = 10, reviewAfterClose = true, questionCount = 10, category = "All", shuffleQuestions = true, shuffleAnswers = true }) : null,
         };
         db.Activities.Add(a);
         await db.SaveChangesAsync(ct);

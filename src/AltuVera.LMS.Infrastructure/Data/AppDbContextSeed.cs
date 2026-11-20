@@ -36,5 +36,6 @@ public static class AppDbContextSeed
         }
 
         await DemoDataSeed.SeedAsync(services.GetRequiredService<AppDbContext>(), userManager);
+        await QuestionBankSeed.EnsureAsync(services.GetRequiredService<AppDbContext>());
     }
 }

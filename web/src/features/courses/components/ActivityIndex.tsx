@@ -56,7 +56,7 @@ export function ActivityIndex({ course, kind }: { course: Course; kind: Kind }) 
                   </>}
                   {kind === 'quiz' && <>
                     <td className="px-5 py-3 muted whitespace-nowrap">{fmtShort(a.quiz?.closeDate ?? null)}</td>
-                    <td className="px-5 py-3">{(() => { const done = (attempts[a.id] ?? []).filter((x) => x.userId === CURRENT_STUDENT_ID && x.score !== null); return !isTeacher && done.length ? `${Math.max(...done.map((x) => (x.score! / 5) * (a.quiz?.maxGrade ?? 10))).toFixed(2)}` : '-' })()}</td>
+                    <td className="px-5 py-3">{(() => { const done = (attempts[a.id] ?? []).filter((x) => x.userId === CURRENT_STUDENT_ID && x.score !== null); return !isTeacher && done.length ? `${Math.max(...done.map((x) => (x.score! / Math.max(1, x.maxScore ?? 5)) * (a.quiz?.maxGrade ?? 10))).toFixed(2)}` : '-' })()}</td>
                   </>}
                   {kind === 'resource' && <td className="px-5 py-3 muted capitalize">{a.type === 'resource' ? 'File' : a.type}</td>}
                 </tr>

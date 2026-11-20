@@ -29,6 +29,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
     public DbSet<SubmissionComment> SubmissionComments => Set<SubmissionComment>();
     public DbSet<QuizAttempt> QuizAttempts => Set<QuizAttempt>();
+    public DbSet<Question> Questions => Set<Question>();
     public DbSet<FeedbackResponse> FeedbackResponses => Set<FeedbackResponse>();
     public DbSet<ChoiceGroup> ChoiceGroups => Set<ChoiceGroup>();
     public DbSet<ChoiceGroupMember> ChoiceGroupMembers => Set<ChoiceGroupMember>();

@@ -78,6 +78,11 @@ public class SubmissionConfiguration : IEntityTypeConfiguration<Submission>
     }
 }
 
+public class QuestionConfiguration : IEntityTypeConfiguration<Question>
+{
+    public void Configure(EntityTypeBuilder<Question> b) { b.HasIndex(x => new { x.CourseId, x.Category }); b.Property(x => x.Category).HasMaxLength(100); }
+}
+
 public class ChoiceGroupConfiguration : IEntityTypeConfiguration<ChoiceGroup>
 {
     public void Configure(EntityTypeBuilder<ChoiceGroup> b) =>

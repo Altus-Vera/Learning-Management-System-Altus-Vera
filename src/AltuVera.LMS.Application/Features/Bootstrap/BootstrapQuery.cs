@@ -79,7 +79,7 @@ public class BootstrapHandler(IApplicationDbContext db, ICurrentUserService user
         if (!user.IsTeacher) attemptsQuery = attemptsQuery.Where(a => a.UserId == me);
         var attempts = (await attemptsQuery.ToListAsync(ct)).GroupBy(a => a.ActivityId).ToDictionary(g => g.Key.ToString(), g => g.OrderBy(a => a.StartedAt).Select(a => new
         {
-            id = a.Id, userId = a.UserId, startedAt = a.StartedAt, finishedAt = a.FinishedAt, answers = JsonSerializer.Deserialize<Dictionary<string, int>>(a.AnswersJson) ?? [], score = a.Score,
+            id = a.Id, userId = a.UserId, startedAt = a.StartedAt, finishedAt = a.FinishedAt, answers = JsonSerializer.Deserialize<Dictionary<string, int>>(a.AnswersJson) ?? [], score = a.Score, maxScore = a.MaxScore,
         }).ToList());
 
         var feedbackRows = await db.FeedbackResponses.AsNoTracking().Where(f => activityIds.Contains(f.ActivityId)).ToListAsync(ct);
