@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Timer, Save, BarChart3, Settings2, Play, Eye } from 'lucide-react'
+import { Timer, Save, BarChart3, Settings2, Play, Eye, PieChart } from 'lucide-react'
+import { QuizAnalytics } from './QuizAnalytics'
 import { useActivityStore, QUIZ_QUESTIONS, useMe, type QuizAttempt } from '../../store/activityStore'
 import { useLmsStore, quizDefaults, type Activity, type QuizSettings } from '../../store/lmsStore'
 import { Modal } from '../../components/Modal'
@@ -10,7 +11,7 @@ import { fmtDate, fromLocalInput, toLocalInput } from '../../lib/format'
 const EMPTY: QuizAttempt[] = []
 const N = QUIZ_QUESTIONS.length
 
-const finalGrade = (attempts: QuizAttempt[], s: QuizSettings) => {
+export const finalGrade = (attempts: QuizAttempt[], s: QuizSettings) => {
   const done = attempts.filter((a) => a.score !== null)
   if (!done.length) return null
   const scores = done.map((a) => (a.score! / N) * s.maxGrade)
@@ -23,14 +24,14 @@ const finalGrade = (attempts: QuizAttempt[], s: QuizSettings) => {
 export function QuizView({ a }: { a: Activity }) {
   const me = useMe()
   const s = a.quiz ?? quizDefaults()
-  const [tab, setTab] = useState<'info' | 'results' | 'settings'>('info')
+  const [tab, setTab] = useState<'info' | 'results' | 'analytics' | 'settings'>('info')
   if (!me.teacher) return <StudentQuiz a={a} s={s} />
   return (
     <div className="space-y-4">
       <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
-        {([['info', 'Quiz', Eye], ['results', 'Results', BarChart3], ['settings', 'Settings', Settings2]] as const).map(([k, l, Icon]) => <button key={k} className={`tab flex items-center gap-2 ${tab === k ? 'tab-active' : ''}`} onClick={() => setTab(k)}><Icon size={15} />{l}</button>)}
+        {([['info', 'Quiz', Eye], ['results', 'Results', BarChart3], ['analytics', 'Analytics', PieChart], ['settings', 'Settings', Settings2]] as const).map(([k, l, Icon]) => <button key={k} className={`tab flex items-center gap-2 ${tab === k ? 'tab-active' : ''}`} onClick={() => setTab(k)}><Icon size={15} />{l}</button>)}
       </div>
-      {tab === 'info' ? <QuizInfo a={a} s={s} /> : tab === 'results' ? <QuizResults a={a} s={s} /> : <QuizSettingsForm key={a.id} a={a} s={s} />}
+      {tab === 'info' ? <QuizInfo a={a} s={s} /> : tab === 'results' ? <QuizResults a={a} s={s} /> : tab === 'analytics' ? <QuizAnalytics a={a} s={s} /> : <QuizSettingsForm key={a.id} a={a} s={s} />}
     </div>
   )
 }
@@ -180,10 +181,9 @@ function Review({ attempt, onClose, s }: { attempt: QuizAttempt; onClose: () => 
 function QuizResults({ a, s }: { a: Activity; s: QuizSettings }) {
   const STUDENTS = useEnrolled(useCourseIdOfActivity(a.id))
   const real = useActivityStore((st) => st.attempts[a.id]) ?? EMPTY
-  const rows = STUDENTS.map((st, i) => {
+  const rows = STUDENTS.map((st) => {
     const mine = real.filter((x) => x.userId === st.id && x.finishedAt)
-    const seeded = mine.length ? null : i % 3 === 2 ? null : (3 + (i % 3)) as number
-    return { st, attempts: mine.length || (seeded !== null ? 1 : 0), grade: mine.length ? finalGrade(mine, s) : seeded !== null ? (seeded / N) * s.maxGrade : null }
+    return { st, attempts: mine.length, grade: mine.length ? finalGrade(mine, s) : null }
   })
   const graded = rows.filter((r) => r.grade !== null)
   const avg = graded.length ? graded.reduce((n, r) => n + r.grade!, 0) / graded.length : 0
