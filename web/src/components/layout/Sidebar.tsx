@@ -2,7 +2,8 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Home, CalendarDays, GraduationCap, BookOpen, Library, ScrollText, MessageSquareWarning, ChevronDown, FolderLock, Award } from 'lucide-react'
 import { useState } from 'react'
 import { ShieldCheck, Users, Wallet, BookPlus, ClipboardList, History } from 'lucide-react'
-import { useUiStore, useIsRegistrar } from '../../store/uiStore'
+import { useUiStore, useIsRegistrar, useRole } from '../../store/uiStore'
+import { HeartPulse } from 'lucide-react'
 import { BrandLogo } from '../BrandLogo'
 import { useMyCourses } from '../../store/adminStore'
 
@@ -44,6 +45,8 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
 
   const wide = !collapsed || mobileOpen
   const registrar = useIsRegistrar()
+  const { isTeacher } = useRole()
+  const main = [...MAIN.slice(0, 4), isTeacher ? { to: '/insights', label: 'Student insights', icon: HeartPulse } : { to: '/insights/me', label: 'My progress', icon: HeartPulse }, ...MAIN.slice(4)]
 
   return (
     <aside
@@ -76,7 +79,7 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
           </div>
         )}
         <div className="space-y-1">
-          {MAIN.map(({ to, label, icon: Icon }) => (
+          {main.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} className={linkCls} title={label}>
               <Icon size={19} className="shrink-0" />
               {wide && label}

@@ -52,7 +52,7 @@ public static class DemoDataSeed
 
     public static async Task SeedAsync(AppDbContext db, UserManager<AppUser> users)
     {
-        if (await db.Courses.AnyAsync()) return;
+        if (await db.Courses.AnyAsync()) { await EnsureActivityHistoryAsync(db); return; }
 
         db.Batches.AddRange(
             new Batch { Code = "se22", Name = "BSc (Hons) Software Engineering — 22.2", Programme = "Software Engineering", Intake = "22.2", Year = 4, Semester = 1 },
@@ -190,6 +190,35 @@ public static class DemoDataSeed
             new Notification { UserId = me, Component = "Assignment", Subject = "Submission received", Text = "You have submitted Assignment Presentation Slides.", At = DateTime.UtcNow.AddDays(-3), Read = true },
             new Notification { UserId = me, Component = "System", Subject = "You earned a badge: Early Submitter", Text = "Congratulations! You have been awarded the badge “Early Submitter”.", Link = "/badges", At = DateTime.UtcNow.AddDays(-7), Read = true });
 
+        await db.SaveChangesAsync();
+    }
+
+    /// Gives sample enrolments a realistic course-visit history so engagement analytics are meaningful.
+    private static async Task EnsureActivityHistoryAsync(AppDbContext db)
+    {
+        const string flag = "DemoAnalyticsV2";
+        if (await db.SystemSettings.AnyAsync(s => s.Key == flag)) return;
+        var students = await db.Users.Where(u => u.BatchCode == "se22" && u.IndexNo != null).OrderBy(u => u.IndexNo).Select(u => u.Id).ToListAsync();
+        var states = await db.CourseUserStates.ToListAsync();
+        foreach (var e in await db.Enrolments.AsNoTracking().ToListAsync())
+        {
+            var rank = students.IndexOf(e.UserId);
+            var daysAgo = rank switch { 0 => 0, 1 => 2, 2 => 1, 3 => 25, 4 => 19, 5 => 6, _ => 3 } + (rank == 0 ? 0 : e.CourseId % 3);
+            var st = states.FirstOrDefault(s => s.CourseId == e.CourseId && s.UserId == e.UserId);
+            if (st is null) db.CourseUserStates.Add(new CourseUserState { CourseId = e.CourseId, UserId = e.UserId, LastAccess = DateTime.UtcNow.AddDays(-daysAgo) });
+            else if (rank != 0) st.LastAccess = DateTime.UtcNow.AddDays(-daysAgo);
+        }
+        // Two struggling students so the early-warning analytics have realistic cases.
+        var struggling = new[] { students.ElementAtOrDefault(3), students.ElementAtOrDefault(5) }.Where(s => s is not null).ToList();
+        var subs = await db.Submissions.Where(s => struggling.Contains(s.StudentId) && s.Status == "submitted").ToListAsync();
+        var i = 0;
+        foreach (var s in subs)
+        {
+            s.Grade = 28 + (i++ * 7 % 18);
+            s.Feedback = "Needs significant improvement. Please see me during consultation hours.";
+            s.GradedAt ??= DateTime.UtcNow.AddDays(-2);
+        }
+        db.SystemSettings.Add(new SystemSetting { Key = flag, Value = "true" });
         await db.SaveChangesAsync();
     }
 

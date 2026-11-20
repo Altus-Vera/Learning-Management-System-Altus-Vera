@@ -5,6 +5,7 @@ import { usePrefsStore, BLOCK_LABELS, BADGES, type BlockId } from '../../../stor
 import { useCalendarEvents, EVENT_COLORS } from '../../calendar/useCalendarEvents'
 import { toast } from '../../../components/Toast'
 import { useMyCourses, useMyBlocks, useAdminStore } from '../../../store/adminStore'
+import { AttentionCard, HealthCard } from '../../insights/DashboardCards'
 import { useLmsStore, courseProgress, assignPhase, CURRENT_STUDENT_ID, STUDENTS, type Course } from '../../../store/lmsStore'
 import { useAuthStore } from '../../../store/authStore'
 import { useRole } from '../../../store/uiStore'
@@ -168,6 +169,7 @@ export default function DashboardPage() {
         <Stat icon={AlertTriangle} label="Overdue" value={overdue} tone="#DC2626" />
         <Stat icon={TrendingUp} label="Average progress" value={`${avg}%`} tone="#7C3AED" />
       </div>
+      {isTeacher ? <AttentionCard /> : <HealthCard />}
 
       <div className={`grid gap-8 ${hideBlocks ? '' : 'xl:grid-cols-[minmax(0,1fr)_360px]'}`}>
         <div className="space-y-8 min-w-0">

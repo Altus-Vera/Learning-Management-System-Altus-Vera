@@ -177,8 +177,8 @@ public class MessagingController(IMediator mediator) : ControllerBase
     [HttpDelete("conversations/{id:int}")]
     public async Task<IActionResult> DeleteConversation(int id, CancellationToken ct) { await mediator.Send(new DeleteConversationCommand(id), ct); return NoContent(); }
 
-    [HttpPost("contacts/{userId}/{action}")]
-    public async Task<IActionResult> Contact(string userId, string action, CancellationToken ct) { await mediator.Send(new ContactActionCommand(userId, action), ct); return NoContent(); }
+    [HttpPost("contacts/{userId}/{op}")]
+    public async Task<IActionResult> Contact(string userId, string op, CancellationToken ct) { await mediator.Send(new ContactActionCommand(userId, op), ct); return NoContent(); }
 
     [HttpPut("notifications/{id:int}/read")]
     public async Task<IActionResult> Read(int id, CancellationToken ct) { await mediator.Send(new MarkNotificationsReadCommand(id), ct); return NoContent(); }
@@ -188,6 +188,23 @@ public class MessagingController(IMediator mediator) : ControllerBase
 
     [HttpPut("me/preferences")]
     public async Task<IActionResult> SavePreferences([FromBody] JsonElement prefs, CancellationToken ct) { await mediator.Send(new SavePreferencesCommand(prefs), ct); return NoContent(); }
+}
+
+[Authorize]
+[ApiController]
+[Route("api/v1/analytics")]
+public class AnalyticsController(IMediator mediator) : ControllerBase
+{
+    public record NotifyBody(string StudentId, int CourseId, string Message);
+
+    [HttpGet("at-risk")]
+    public async Task<IActionResult> AtRisk([FromQuery] int? courseId, CancellationToken ct) => Ok(await mediator.Send(new Application.Features.Analytics.AtRiskQuery(courseId), ct));
+
+    [HttpGet("me")]
+    public async Task<IActionResult> Me(CancellationToken ct) => Ok(await mediator.Send(new Application.Features.Analytics.MyInsightsQuery(), ct));
+
+    [HttpPost("notify")]
+    public async Task<IActionResult> Notify([FromBody] NotifyBody b, CancellationToken ct) { await mediator.Send(new Application.Features.Analytics.NotifyStudentCommand(b.StudentId, b.CourseId, b.Message), ct); return NoContent(); }
 }
 
 [Authorize(Roles = "Admin")]

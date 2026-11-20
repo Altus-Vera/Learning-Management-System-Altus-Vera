@@ -21,6 +21,8 @@ const AdminPayments = adminPage('AdminPayments')
 const AdminEnrolment = adminPage('AdminEnrolment')
 const AdminSubmissions = adminPage('AdminSubmissions')
 const AdminAudit = adminPage('AdminAudit')
+const InsightsPage = lazy(() => import('../features/insights/InsightsPage'))
+const MyInsightsPage = lazy(() => import('../features/insights/MyInsightsPage'))
 const NotificationsPage = lazy(() => import('../features/user/NotificationsPage'))
 const PrefsHub      = lazy(() => import('../features/user/PreferencesPages').then((m) => ({ default: m.PreferencesHub })))
 const PrefsSection  = lazy(() => import('../features/user/PreferencesPages').then((m) => ({ default: m.PreferencesSection })))
@@ -57,6 +59,8 @@ export const router = createBrowserRouter([
       { path: '/badges', element: s(<BadgesPage />) },
       { path: '/search', element: s(<SearchPage />) },
       { path: '/notifications', element: s(<NotificationsPage />) },
+      { path: '/insights', element: s(<InsightsPage />) },
+      { path: '/insights/me', element: s(<MyInsightsPage />) },
       { path: '/admin', element: s(<AdminOverview />) },
       { path: '/admin/students', element: s(<AdminStudents />) },
       { path: '/admin/payments', element: s(<AdminPayments />) },
