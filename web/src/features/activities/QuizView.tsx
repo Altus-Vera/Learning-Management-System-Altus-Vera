@@ -66,7 +66,7 @@ function StudentQuiz({ a, s }: { a: Activity; s: QuizSettings }) {
   const reviewAllowed = (x: QuizAttempt) => !!x.finishedAt && s.reviewAfterClose
   const grade = finalGrade(attempts, s)
 
-  if (active) return <Attempt quiz={s} attempt={active} onFinish={(ans) => { finish(a.id, active.id, ans); setActive(null); toast('Attempt submitted') }} />
+  if (active) return <Attempt quiz={s} attempt={active} onFinish={(ans) => { const id = active.id; setActive(null); void finish(a.id, id, ans).then(() => toast('Attempt submitted')) }} />
   if (review) return <Review attempt={review} onClose={() => setReview(null)} s={s} />
 
   return (
@@ -98,7 +98,7 @@ function StudentQuiz({ a, s }: { a: Activity; s: QuizSettings }) {
           : <button className="btn btn-primary" onClick={() => setConfirmStart(true)}><Play size={16} /> {used ? 'Re-attempt quiz' : 'Attempt quiz now'}</button>}
       </div>
       <Modal open={confirmStart} title="Start attempt" onClose={() => setConfirmStart(false)}
-        footer={<><button className="btn btn-secondary" onClick={() => setConfirmStart(false)}>Cancel</button><button className="btn btn-primary" onClick={() => { setConfirmStart(false); setActive(start(a.id, me.id)) }}>Start attempt</button></>}>
+        footer={<><button className="btn btn-secondary" onClick={() => setConfirmStart(false)}>Cancel</button><button className="btn btn-primary" onClick={() => { setConfirmStart(false); void start(a.id).then((att) => att && setActive(att)) }}>Start attempt</button></>}>
         <p className="text-sm"><b>Time limit</b></p>
         <p className="text-sm mt-1">Your attempt will have a time limit of {s.timeLimitMins} mins. When you start, the timer will begin to count down and cannot be paused. You must finish your attempt before it expires. Are you sure that you wish to start now?</p>
       </Modal>

@@ -36,7 +36,7 @@ export function MessageDrawer({ open, onClose, startWith }: { open: boolean; onC
   const [q, setQ] = useState('')
 
   useEffect(() => {
-    if (open && startWith) setView({ kind: 'conv', id: st.startPrivate(me.id, startWith) })
+    if (open && startWith) void st.startPrivate(me.id, startWith).then((id) => id && setView({ kind: 'conv', id }))
   }, [open, startWith]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mine = st.conversations.filter((c) => c.members.includes(me.id))
@@ -86,7 +86,7 @@ export function MessageDrawer({ open, onClose, startWith }: { open: boolean; onC
                   <div className="px-4 py-2 text-xs font-bold uppercase tracking-wider muted">Contacts and non-contacts</div>
                   {searchResults.people.length === 0 && <div className="px-4 py-2 text-sm muted">No results</div>}
                   {searchResults.people.map((p) => (
-                    <button key={p.id} onClick={() => { setQ(''); setView({ kind: 'conv', id: st.startPrivate(me.id, p.id) }) }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--color-bg-subtle)] text-left">
+                    <button key={p.id} onClick={() => { setQ(''); void st.startPrivate(me.id, p.id).then((id) => id && setView({ kind: 'conv', id })) }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--color-bg-subtle)] text-left">
                       <Avatar name={p.name} size={32} /><span className="text-sm font-medium flex-1" style={{ color: 'var(--color-heading)' }}>{p.name}</span>{st.contacts.includes(p.id) && <span className="badge badge-blue">Contact</span>}{st.blocked.includes(p.id) && <span className="badge badge-red">Blocked</span>}
                     </button>
                   ))}
@@ -109,7 +109,7 @@ export function MessageDrawer({ open, onClose, startWith }: { open: boolean; onC
           </>
         )}
         {view.kind === 'conv' && <ConversationView id={view.id} onBack={() => setView({ kind: 'list' })} onClose={onClose} />}
-        {view.kind === 'contacts' && <ContactsView onBack={() => setView({ kind: 'list' })} onOpen={(pid) => setView({ kind: 'conv', id: st.startPrivate(me.id, pid) })} />}
+        {view.kind === 'contacts' && <ContactsView onBack={() => setView({ kind: 'list' })} onOpen={(pid) => void st.startPrivate(me.id, pid).then((id) => id && setView({ kind: 'conv', id }))} />}
         {view.kind === 'settings' && <SettingsView onBack={() => setView({ kind: 'list' })} onClose={onClose} />}
       </aside>
     </>

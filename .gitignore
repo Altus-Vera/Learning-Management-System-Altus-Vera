@@ -17,3 +17,6 @@ web/.env.local
 # IDE
 .idea/
 *.DS_Store
+
+# Uploaded submission files
+App_Data/

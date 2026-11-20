@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { api } from '../services/api'
+import { call } from '../services/sync'
 
 export type ActivityType = 'assign' | 'resource' | 'forum' | 'quiz' | 'url' | 'folder' | 'choice' | 'feedback' | 'page' | 'label'
 
@@ -28,7 +29,7 @@ export interface AssignSettings {
   maxGrade: number
 }
 
-export interface SubmissionFile { name: string; size: number; uploadedAt: string }
+export interface SubmissionFile { id?: number; name: string; size: number; uploadedAt: string; downloadable?: boolean }
 
 export interface Submission {
   studentId: string
@@ -62,6 +63,7 @@ export interface Course {
   term: string
   color: string
   lecturer: string
+  lecturerId?: string
   starred: boolean
   hidden: boolean
   lastAccess: string
@@ -72,147 +74,16 @@ export interface Student { id: string; name: string; email: string }
 
 export interface LmsEvent { id: number; title: string; date: string; courseId?: number; type: 'due' | 'user' | 'course' | 'site' }
 
-const d = (offsetDays: number, h = 23, m = 59) => {
-  const t = new Date()
-  t.setDate(t.getDate() + offsetDays)
-  t.setHours(h, m, 0, 0)
-  return t.toISOString()
-}
+/** Students visible to the signed-in user; filled from the server on every data load. */
+export const STUDENTS: Student[] = []
 
-const assign = (p: Partial<AssignSettings>): AssignSettings => ({
-  allowSubmissionsFrom: d(-14, 0, 0),
-  dueDate: d(7),
-  cutOffDate: d(9),
-  remindToGradeBy: d(14),
-  acceptingSubmissions: true,
-  fileSubmissions: true,
-  onlineText: false,
-  maxFiles: 1,
-  maxSizeMb: 20,
-  acceptedTypes: '.pdf,.docx,.pptx,.zip',
-  requireSubmitButton: true,
-  maxGrade: 100,
-  ...p,
-})
+/** The signed-in user's id; set from the server before any view renders data. */
+export let CURRENT_STUDENT_ID = ''
+export const setCurrentUserId = (id: string) => { CURRENT_STUDENT_ID = id }
 
 export const quizDefaults = (p: Partial<QuizSettings> = {}): QuizSettings => ({
-  openDate: d(-1, 8, 0),
-  closeDate: d(5, 23, 59),
-  timeLimitMins: 30,
-  attemptsAllowed: 1,
-  gradingMethod: 'Highest grade',
-  maxGrade: 10,
-  reviewAfterClose: true,
-  ...p,
+  openDate: null, closeDate: null, timeLimitMins: 30, attemptsAllowed: 1, gradingMethod: 'Highest grade', maxGrade: 10, reviewAfterClose: true, ...p,
 })
-
-let aid = 1000
-const notes = (n: number, visibleUpTo: number): Activity[] =>
-  Array.from({ length: n }, (_, i) => ({
-    id: aid++,
-    type: 'resource' as const,
-    name: `Lecture Note ${String(i + 1).padStart(2, '0')}`,
-    visible: i < visibleUpTo,
-  }))
-
-const tutorials = (n: number, start: number): Activity[] =>
-  Array.from({ length: n }, (_, i) => ({
-    id: aid++,
-    type: 'assign' as const,
-    name: `Tutorial ${String(i + 1).padStart(2, '0')}`,
-    description: `Answer all questions in Tutorial ${i + 1} and upload a single PDF. Handwritten answers must be scanned clearly.`,
-    visible: true,
-    assign: assign({ dueDate: d(start + i * 7), cutOffDate: d(start + i * 7 + 2), allowSubmissionsFrom: d(start + i * 7 - 7, 0, 0) }),
-  }))
-
-const buildSections = (code: string): Section[] => [
-  {
-    id: 1, title: 'General', summary: 'Course announcements and module information.',
-    activities: [
-      { id: aid++, type: 'label', name: 'Welcome', visible: true, content: `Welcome to ${code}! Please read the module handbook before the first lecture. Lecture recordings are available on MS Teams within 24 hours.` },
-      { id: aid++, type: 'forum', name: 'Announcements', visible: true, description: 'General news and announcements' },
-      { id: aid++, type: 'forum', name: 'Discussion Forum', visible: true, description: 'Ask questions and discuss the module with your peers.' },
-      { id: aid++, type: 'page', name: 'Module Information', visible: true, content: `Module code: ${code}\nCredits: 3\nAssessment: Coursework 40% · Final examination 60%\n\nLearning outcomes\n• Analyse key concepts covered in the module.\n• Apply theory to practical case studies.\n• Communicate findings clearly in written and oral form.\n\nLecture schedule\nMonday 08:30 – 10:30 · Hall C2-004\nTutorial: Wednesday 13:00 – 14:00` },
-      { id: aid++, type: 'resource', name: `${code} Module Outline`, visible: true },
-      { id: aid++, type: 'url', name: 'Recorded Lectures (MS Teams)', visible: true },
-      { id: aid++, type: 'feedback', name: 'Student Feedback Form', visible: true, description: 'Please rate this module. The feedback is anonymous and helps us improve the course.' },
-    ],
-  },
-  { id: 2, title: 'Lecture Notes', activities: notes(10, 8) },
-  { id: 3, title: 'Tutorials', activities: tutorials(10, -42) },
-  {
-    id: 4, title: 'Assignment', summary: 'Group assignment — 40% of the final mark.',
-    activities: [
-      { id: aid++, type: 'resource', name: 'Assignment Description', visible: true },
-      { id: aid++, type: 'choice', name: 'Assignment Group Enrollment', visible: true },
-      { id: aid++, type: 'assign', name: 'Assignment Presentation Slides', visible: true, description: 'Upload your group presentation slides (PPTX or PDF).', assign: assign({ dueDate: d(-3), cutOffDate: d(-1), maxFiles: 2, acceptedTypes: '.pptx,.pdf' }) },
-      { id: aid++, type: 'assign', name: 'Assignment Final Report Submission', visible: true, description: 'Submit the final report. Turnitin similarity must be below 20%.', assign: assign({ dueDate: d(10), cutOffDate: d(12), maxSizeMb: 50 }) },
-    ],
-  },
-  {
-    id: 5, title: 'Quizzes', activities: [
-      { id: aid++, type: 'quiz', name: 'In-class Test 01', visible: true, description: 'The test covers lectures 1–4.', quiz: quizDefaults({ openDate: d(-20, 8, 30), closeDate: d(-20, 9, 30), timeLimitMins: 45 }) },
-      { id: aid++, type: 'quiz', name: 'Mid-term Quiz', visible: true, description: 'Answer all questions. You have two attempts; the highest grade counts.', quiz: quizDefaults({ attemptsAllowed: 2 }) },
-      { id: aid++, type: 'folder', name: 'Past Papers', visible: true },
-    ],
-  },
-  { id: 6, title: 'Topic 6', activities: [] },
-]
-
-const COURSES: Omit<Course, 'sections'>[] = [
-  { id: 13195, shortName: 'BS401.3', fullName: 'Business Policy and Strategy', category: 'Faculty of Business', term: 'Year 4 — Semester 1', color: '#0033A0', lecturer: 'Dr. K. Perera', starred: true, hidden: false, lastAccess: d(0, 9, 0) },
-  { id: 13210, shortName: 'CS404.3', fullName: 'Parallel and Distributed Computing', category: 'Faculty of Computing', term: 'Year 4 — Semester 2', color: '#0D9488', lecturer: 'Mr. S. Fernando', starred: false, hidden: false, lastAccess: d(-1, 15, 0) },
-  { id: 13188, shortName: 'PR400', fullName: 'Special Award Project', category: 'Faculty of Computing', term: 'Year 4 — Semester 1', color: '#7C3AED', lecturer: 'Prof. N. Silva', starred: false, hidden: false, lastAccess: d(-2, 11, 0) },
-  { id: 13201, shortName: 'SE402.3', fullName: 'Software Quality Assurance', category: 'Faculty of Computing', term: 'Year 4 — Semester 1', color: '#DB2777', lecturer: 'Ms. A. Jayasinghe', starred: false, hidden: false, lastAccess: d(-4, 10, 0) },
-  { id: 13177, shortName: 'MG403.3', fullName: 'Entrepreneurship and Innovation', category: 'Faculty of Business', term: 'Year 4 — Semester 1', color: '#EA580C', lecturer: 'Dr. R. Wickrama', starred: false, hidden: false, lastAccess: d(-6, 14, 0) },
-  { id: 12950, shortName: 'CS301.3', fullName: 'Computer Networks', category: 'Faculty of Computing', term: 'Year 3 — Semester 2', color: '#0891B2', lecturer: 'Mr. P. Bandara', starred: false, hidden: false, lastAccess: d(-90, 10, 0) },
-]
-
-export const STUDENTS: Student[] = [
-  { id: 's1', name: 'DVD Silva', email: 'dvdsilva@students.altusvera.lk' },
-  { id: 's2', name: 'GPAD Nilwala', email: 'gpadnilwala@students.altusvera.lk' },
-  { id: 's3', name: 'KWKS Wijerathna', email: 'kwkswijerathna@students.altusvera.lk' },
-  { id: 's4', name: 'TDJ Pathirana', email: 'tdjpathirana@students.altusvera.lk' },
-  { id: 's5', name: 'HN Kanakarathne', email: 'hnkanakarathne@students.altusvera.lk' },
-  { id: 's6', name: 'MAS Perera', email: 'masperera@students.altusvera.lk' },
-]
-
-export const CURRENT_STUDENT_ID = 's1'
-
-const seedSubmissions = (courses: Course[]): Record<string, Submission> => {
-  const out: Record<string, Submission> = {}
-  courses.forEach((c) =>
-    c.sections.forEach((s) =>
-      s.activities.forEach((a, ai) => {
-        if (a.type !== 'assign') return
-        const due = new Date(a.assign!.dueDate!)
-        STUDENTS.forEach((st, si) => {
-          const past = due < new Date()
-          const done = past ? (si + ai) % 4 !== 0 : si % 3 === 1
-          out[`${a.id}:${st.id}`] = {
-            studentId: st.id,
-            status: done ? 'submitted' : 'new',
-            files: done ? [{ name: `${st.name.split(' ')[1] ?? st.name}_${a.name.replace(/\s+/g, '_')}.pdf`, size: 420_000 + si * 51_000, uploadedAt: new Date(due.getTime() - 86_400_000 * (1 + si)).toISOString() }] : [],
-            onlineText: '',
-            modifiedAt: done ? new Date(due.getTime() - 86_400_000 * (1 + si)).toISOString() : null,
-            grade: done && past && si % 2 === 0 ? 55 + ((si * 7 + ai * 3) % 40) : null,
-            feedback: done && past && si % 2 === 0 ? 'Good work. Improve the referencing.' : '',
-            gradedAt: done && past && si % 2 === 0 ? d(-1, 10, 0) : null,
-          }
-        })
-      }),
-    ),
-  )
-  return out
-}
-
-const initialCourses: Course[] = COURSES.map((c) => ({ ...c, sections: buildSections(c.shortName) }))
-
-const initialEvents: LmsEvent[] = [
-  { id: 1, title: 'Mid-semester break begins', date: d(12, 8, 0), type: 'site' },
-  { id: 2, title: 'Guest lecture — Strategy in Practice', date: d(3, 14, 0), courseId: 13195, type: 'course' },
-  { id: 3, title: 'Project supervisor meeting', date: d(1, 10, 30), courseId: 13188, type: 'user' },
-]
 
 interface LmsState {
   courses: Course[]
@@ -231,77 +102,94 @@ interface LmsState {
   addActivity: (courseId: number, sectionId: number, type: ActivityType, name: string) => void
   updateAssign: (activityId: number, patch: Partial<AssignSettings>) => void
   updateActivity: (activityId: number, patch: Partial<Activity>) => void
-  saveSubmission: (activityId: number, studentId: string, patch: Partial<Submission>) => void
   gradeSubmission: (activityId: number, studentId: string, grade: number | null, feedback: string) => void
+  setSubmissionStatus: (activityId: number, studentId: string, status: Submission['status']) => void
   addEvent: (e: Omit<LmsEvent, 'id'>) => void
   deleteEvent: (id: number) => void
-  reset: () => void
 }
 
 const mapActivity = (courses: Course[], id: number, fn: (a: Activity) => Activity | null): Course[] =>
   courses.map((c) => ({
     ...c,
-    sections: c.sections.map((s) => ({
-      ...s,
-      activities: s.activities.flatMap((a) => {
-        if (a.id !== id) return [a]
-        const r = fn(a)
-        return r ? [r] : []
-      }),
-    })),
+    sections: c.sections.map((s) => ({ ...s, activities: s.activities.flatMap((a) => { if (a.id !== id) return [a]; const r = fn(a); return r ? [r] : [] }) })),
   }))
 
-const fresh = () => {
-  const initialCompletion: Record<string, boolean> = {}
-  initialCourses.forEach((c) => c.sections.forEach((s) => s.activities.forEach((a, i) => { if (s.id <= 3 && i < 5) initialCompletion[a.id] = true })))
-  return { courses: initialCourses, submissions: seedSubmissions(initialCourses), completion: initialCompletion, events: initialEvents, editMode: false }
-}
+export const useLmsStore = create<LmsState>()((set, get) => ({
+  courses: [],
+  submissions: {},
+  completion: {},
+  events: [],
+  editMode: false,
+  setEditMode: (editMode) => set({ editMode }),
 
-export const useLmsStore = create<LmsState>()(
-  persist(
-    (set) => ({
-      ...fresh(),
-      setEditMode: (editMode) => set({ editMode }),
-      toggleStar: (id) => set((s) => ({ courses: s.courses.map((c) => (c.id === id ? { ...c, starred: !c.starred } : c)) })),
-      toggleHidden: (id) => set((s) => ({ courses: s.courses.map((c) => (c.id === id ? { ...c, hidden: !c.hidden } : c)) })),
-      touchCourse: (id) => set((s) => ({ courses: s.courses.map((c) => (c.id === id ? { ...c, lastAccess: new Date().toISOString() } : c)) })),
-      toggleCompletion: (id) => set((s) => ({ completion: { ...s.completion, [id]: !s.completion[id] } })),
-      setActivityVisible: (id, visible) => set((s) => ({ courses: mapActivity(s.courses, id, (a) => ({ ...a, visible })) })),
-      renameActivity: (id, name) => set((s) => ({ courses: mapActivity(s.courses, id, (a) => ({ ...a, name })) })),
-      deleteActivity: (id) => set((s) => ({ courses: mapActivity(s.courses, id, () => null) })),
-      addActivity: (courseId, sectionId, type, name) =>
-        set((s) => ({
-          courses: s.courses.map((c) =>
-            c.id !== courseId ? c : {
-              ...c,
-              sections: c.sections.map((sec) =>
-                sec.id !== sectionId ? sec : {
-                  ...sec,
-                  activities: [...sec.activities, { id: Date.now(), type, name, visible: true, description: '', assign: type === 'assign' ? assign({}) : undefined, quiz: type === 'quiz' ? quizDefaults() : undefined, content: type === 'page' || type === 'label' ? name : undefined }],
-                }),
-            }),
-        })),
-      updateActivity: (id, patch) => set((s) => ({ courses: mapActivity(s.courses, id, (a) => ({ ...a, ...patch })) })),
-      updateAssign: (id, patch) => set((s) => ({ courses: mapActivity(s.courses, id, (a) => ({ ...a, assign: { ...a.assign!, ...patch } })) })),
-      saveSubmission: (id, studentId, patch) =>
-        set((s) => {
-          const key = `${id}:${studentId}`
-          const prev = s.submissions[key] ?? { studentId, status: 'new', files: [], onlineText: '', modifiedAt: null, grade: null, feedback: '', gradedAt: null }
-          return { submissions: { ...s.submissions, [key]: { ...prev, ...patch, modifiedAt: new Date().toISOString() } } }
-        }),
-      gradeSubmission: (id, studentId, grade, feedback) =>
-        set((s) => {
-          const key = `${id}:${studentId}`
-          const prev = s.submissions[key] ?? { studentId, status: 'new', files: [], onlineText: '', modifiedAt: null, grade: null, feedback: '', gradedAt: null }
-          return { submissions: { ...s.submissions, [key]: { ...prev, grade, feedback, gradedAt: new Date().toISOString() } } }
-        }),
-      addEvent: (e) => set((s) => ({ events: [...s.events, { ...e, id: Date.now() }] })),
-      deleteEvent: (id) => set((s) => ({ events: s.events.filter((e) => e.id !== id) })),
-      reset: () => set(fresh()),
-    }),
-    { name: 'lms-data-v2' },
-  ),
-)
+  toggleStar: (id) => {
+    const starred = !get().courses.find((c) => c.id === id)?.starred
+    set((s) => ({ courses: s.courses.map((c) => (c.id === id ? { ...c, starred } : c)) }))
+    void call(() => api.put(`/api/v1/courses/${id}/state`, { starred, touch: false }), { reload: false })
+  },
+  toggleHidden: (id) => {
+    const hidden = !get().courses.find((c) => c.id === id)?.hidden
+    set((s) => ({ courses: s.courses.map((c) => (c.id === id ? { ...c, hidden } : c)) }))
+    void call(() => api.put(`/api/v1/courses/${id}/state`, { hidden, touch: false }), { reload: false })
+  },
+  touchCourse: (id) => {
+    set((s) => ({ courses: s.courses.map((c) => (c.id === id ? { ...c, lastAccess: new Date().toISOString() } : c)) }))
+    void api.put(`/api/v1/courses/${id}/state`, { touch: true }).catch(() => undefined)
+  },
+  toggleCompletion: (id) => {
+    set((s) => ({ completion: { ...s.completion, [id]: !s.completion[id] } }))
+    void call(() => api.post(`/api/v1/activities/${id}/completion`), { reload: false })
+  },
+  setActivityVisible: (id, visible) => {
+    set((s) => ({ courses: mapActivity(s.courses, id, (a) => ({ ...a, visible })) }))
+    void call(() => api.put(`/api/v1/activities/${id}`, { visible }))
+  },
+  renameActivity: (id, name) => {
+    set((s) => ({ courses: mapActivity(s.courses, id, (a) => ({ ...a, name })) }))
+    void call(() => api.put(`/api/v1/activities/${id}`, { name }))
+  },
+  deleteActivity: (id) => {
+    set((s) => ({ courses: mapActivity(s.courses, id, () => null) }))
+    void call(() => api.delete(`/api/v1/activities/${id}`))
+  },
+  addActivity: (_courseId, sectionId, type, name) => {
+    void call(() => api.post(`/api/v1/sections/${sectionId}/activities`, { type, name }))
+  },
+  updateAssign: (id, patch) => {
+    let next: AssignSettings | undefined
+    set((s) => ({ courses: mapActivity(s.courses, id, (a) => { next = { ...a.assign!, ...patch }; return { ...a, assign: next } }) }))
+    if (next) void call(() => api.put(`/api/v1/activities/${id}`, { assign: next }))
+  },
+  updateActivity: (id, patch) => {
+    set((s) => ({ courses: mapActivity(s.courses, id, (a) => ({ ...a, ...patch })) }))
+    const body: Record<string, unknown> = {}
+    if (patch.name !== undefined) body.name = patch.name
+    if (patch.description !== undefined) body.description = patch.description
+    if (patch.content !== undefined) body.content = patch.content
+    if (patch.visible !== undefined) body.visible = patch.visible
+    if (patch.quiz !== undefined) body.quiz = patch.quiz
+    if (patch.assign !== undefined) body.assign = patch.assign
+    void call(() => api.put(`/api/v1/activities/${id}`, body))
+  },
+  gradeSubmission: (id, studentId, grade, feedback) => {
+    set((s) => {
+      const key = `${id}:${studentId}`
+      const prev = s.submissions[key] ?? { studentId, status: 'new' as const, files: [], onlineText: '', modifiedAt: null, grade: null, feedback: '', gradedAt: null }
+      return { submissions: { ...s.submissions, [key]: { ...prev, grade, feedback, gradedAt: new Date().toISOString() } } }
+    })
+    void call(() => api.put(`/api/v1/assignments/${id}/submissions/${studentId}/grade`, { grade, feedback }))
+  },
+  setSubmissionStatus: (id, studentId, status) => {
+    void call(() => api.put(`/api/v1/assignments/${id}/submissions/${studentId}/status`, { status }))
+  },
+  addEvent: (e) => {
+    void call(() => api.post('/api/v1/calendar/events', { title: e.title, date: e.date, type: e.type, courseId: e.courseId ?? null }))
+  },
+  deleteEvent: (id) => {
+    set((s) => ({ events: s.events.filter((e) => e.id !== id) }))
+    void call(() => api.delete(`/api/v1/calendar/events/${id}`))
+  },
+}))
 
 export const findActivity = (courses: Course[], id: number) => {
   for (const c of courses) for (const s of c.sections) for (const a of s.activities) if (a.id === id) return { course: c, section: s, activity: a }

@@ -1,5 +1,7 @@
 using AltuVera.LMS.API.Extensions;
 using AltuVera.LMS.API.Middleware;
+using AltuVera.LMS.API.Services;
+using AltuVera.LMS.Application.Common.Interfaces;
 using AltuVera.LMS.Application;
 using AltuVera.LMS.Infrastructure;
 using AltuVera.LMS.Infrastructure.Data;
@@ -11,6 +13,8 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 

@@ -6,7 +6,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useRole, useUiStore, roleLabel } from '../../store/uiStore'
 import { usePrefsStore, BADGES } from '../../store/prefsStore'
 import { useSocialStore, PEOPLE } from '../../store/socialStore'
-import { Confirm } from '../../components/Modal'
+import { loadBootstrap } from '../../services/sync'
 import { toast } from '../../components/Toast'
 import { initials } from '../../lib/format'
 import { CourseCard } from '../dashboard/components/CourseCard'
@@ -20,13 +20,11 @@ export function ProfilePage() {
   const { userId } = useParams()
   const user = useAuthStore((s) => s.user)
   const courses = useLmsStore((s) => s.courses)
-  const reset = useLmsStore((s) => s.reset)
   const profile = usePrefsStore((s) => s.profile)
   const showBadges = usePrefsStore((s) => s.badges.showOnProfile)
   const social = useSocialStore()
   const openMessages = useUiStore((s) => s.openMessages)
   const { role } = useRole()
-  const [confirm, setConfirm] = useState(false)
 
   const other = userId ? PEOPLE.find((p) => p.id === userId) : null
   const isMe = !other
@@ -91,13 +89,12 @@ export function ProfilePage() {
               <div className="flex flex-wrap gap-3">{BADGES.map((b) => <Link key={b.id} to="/badges" title={b.name} className="w-12 h-12 rounded-full grid place-items-center text-white" style={{ background: b.color }}><Award size={22} /></Link>)}</div>
             </Card>
           )}
-          <Card title="Demo data" icon={RotateCcw}>
-            <p className="muted">Restore all sample courses, submissions and grades to their initial state.</p>
-            <button className="btn btn-secondary btn-sm" onClick={() => setConfirm(true)}><RotateCcw size={14} /> Reset demo data</button>
+          <Card title="Data" icon={RotateCcw}>
+            <p className="muted">Your courses, submissions and messages are saved on the Altus Vera server.</p>
+            <button className="btn btn-secondary btn-sm" onClick={() => void loadBootstrap().then(() => toast('Data refreshed'))}><RotateCcw size={14} /> Refresh data</button>
           </Card>
         </>}
       </div>
-      <Confirm open={confirm} danger title="Reset demo data?" confirmLabel="Reset" message="All changes to submissions, grades, activities and events will be lost." onConfirm={() => { reset(); toast('Demo data restored') }} onClose={() => setConfirm(false)} />
     </div>
   )
 }

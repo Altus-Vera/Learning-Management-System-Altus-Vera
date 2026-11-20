@@ -1,8 +1,8 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import { useAuthStore } from './authStore'
 import { useUiStore } from './uiStore'
-import { CURRENT_STUDENT_ID } from './lmsStore'
+import { api } from '../services/api'
+import { call } from '../services/sync'
 
 export interface ForumPost { id: number; parentId: number | null; authorId: string; author: string; message: string; at: string }
 export interface Discussion { id: number; subject: string; authorId: string; author: string; createdAt: string; pinned: boolean; locked: boolean; posts: ForumPost[] }
@@ -29,31 +29,12 @@ export const FEEDBACK_QUESTIONS = [
 ]
 export const RATING_LABELS = ['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree']
 
-const ago = (days: number, h = 10) => { const t = new Date(); t.setDate(t.getDate() - days); t.setHours(h, 15, 0, 0); return t.toISOString() }
-
-const once = <T,>(fn: () => T) => { let v: T | undefined; return () => (v ??= fn()) }
-const seedNews = once((): Discussion[] => buildDiscussions(true))
-const seedDisc = once((): Discussion[] => buildDiscussions(false))
-export const seedDiscussions = (news: boolean) => (news ? seedNews() : seedDisc())
-const buildDiscussions = (news: boolean): Discussion[] => news ? [
-  { id: 1, subject: 'Lecture rescheduled to Friday', authorId: 'l1', author: 'Module Lecturer', createdAt: ago(2), pinned: true, locked: false, posts: [{ id: 11, parentId: null, authorId: 'l1', author: 'Module Lecturer', message: 'This week’s lecture will be held on Friday at 10:00 AM in Hall C2-004 instead of Monday.', at: ago(2) }] },
-  { id: 2, subject: 'Assignment groups are final', authorId: 'l1', author: 'Module Lecturer', createdAt: ago(6), pinned: false, locked: true, posts: [{ id: 21, parentId: null, authorId: 'l1', author: 'Module Lecturer', message: 'The group list is now final. All groups must have members registered through the group choice activity.', at: ago(6) }] },
-] : [
-  { id: 3, subject: 'Clarification on Tutorial 05 question 3', authorId: 's2', author: 'GPAD Nilwala', createdAt: ago(3, 14), pinned: false, locked: false, posts: [
-    { id: 31, parentId: null, authorId: 's2', author: 'GPAD Nilwala', message: 'For question 3, should we use the 2023 annual report or the latest one?', at: ago(3, 14) },
-    { id: 32, parentId: 31, authorId: 'l1', author: 'Module Lecturer', message: 'Use the latest annual report available on the company website.', at: ago(3, 16) },
-    { id: 33, parentId: 32, authorId: 's3', author: 'KWKS Wijerathna', message: 'Thank you! That clears it up.', at: ago(2, 9) },
-  ] },
-  { id: 4, subject: 'Study group for the final exam', authorId: 's4', author: 'TDJ Pathirana', createdAt: ago(1, 18), pinned: false, locked: false, posts: [{ id: 41, parentId: null, authorId: 's4', author: 'TDJ Pathirana', message: 'Anyone interested in a weekend study group at the library? Reply below.', at: ago(1, 18) }] },
-]
-
-const FAKE = ['Balasooriya S', 'Fernando TPR', 'Kodithuwakku RPK', 'Sheriffdeen MAH', 'Ariyathilaka DBN', 'Chandrasiri DMH', 'Iniyan M', 'Karunanayake AS', 'Rashmika GDT', 'Rathnayaka CKM', 'Weerasena OVD', 'Ahmed YAR', 'Dissanayaka MIB', 'Lakmali PLA', 'Premarathna GTK', 'Ranwella GKM']
-export const seedGroups = once((): ChoiceGroup[] => [
-  { id: 1, name: 'Group A', description: 'Topic: Corporate strategy of a listed company', capacity: 5, members: [FAKE[0], FAKE[1], FAKE[2], FAKE[3], FAKE[4]] },
-  { id: 2, name: 'Group B', description: 'Topic: Competitive strategy in the telecom sector', capacity: 5, members: [FAKE[5], FAKE[6], FAKE[7]] },
-  { id: 3, name: 'Group C', description: 'Topic: Strategy implementation in SMEs', capacity: 5, members: [FAKE[8], FAKE[9]] },
-  { id: 4, name: 'Group D', description: 'Topic: Digital transformation strategy', capacity: 5, members: [FAKE[10]] },
-])
+const NO_DISCUSSIONS: Discussion[] = []
+const NO_GROUPS: ChoiceGroup[] = []
+const NO_FEEDBACK: FeedbackResponse[] = []
+export const seedDiscussions = (_news: boolean) => NO_DISCUSSIONS
+export const seedGroups = () => NO_GROUPS
+export const seedFeedback = () => NO_FEEDBACK
 
 interface ActivityState {
   forums: Record<number, Discussion[]>
@@ -65,7 +46,6 @@ interface ActivityState {
   groups: Record<number, ChoiceGroup[]>
   comments: Record<string, Comment[]>
 
-  discussions: (forumId: number, news: boolean) => Discussion[]
   addDiscussion: (forumId: number, news: boolean, subject: string, message: string, pinned: boolean) => void
   reply: (forumId: number, news: boolean, discussionId: number, parentId: number, message: string) => void
   editPost: (forumId: number, discussionId: number, postId: number, message: string) => void
@@ -75,88 +55,61 @@ interface ActivityState {
   toggleSubscription: (forumId: number) => void
   toggleStarDiscussion: (discussionId: number) => void
 
-  startAttempt: (quizId: number, userId: string) => QuizAttempt
-  finishAttempt: (quizId: number, attemptId: number, answers: Record<number, number>) => void
+  startAttempt: (quizId: number) => Promise<QuizAttempt | undefined>
+  finishAttempt: (quizId: number, attemptId: number, answers: Record<number, number>) => Promise<void>
 
-  submitFeedback: (feedbackId: number, userId: string, answers: Record<string, number | string>) => void
+  submitFeedback: (feedbackId: number, answers: Record<string, number | string>) => Promise<boolean>
+  joinGroup: (choiceId: number, groupId: number | null) => Promise<boolean>
 
-  groupsFor: (choiceId: number) => ChoiceGroup[]
-  joinGroup: (choiceId: number, groupId: number | null, member: string) => void
-
-  addComment: (key: string, authorId: string, author: string, text: string) => void
+  addComment: (activityId: number, studentId: string, text: string) => void
   deleteComment: (key: string, id: number) => void
 }
 
-export const seedFeedback = once((): FeedbackResponse[] => Array.from({ length: 14 }, (_, i) => ({
-  at: ago(i + 1),
-  answers: { q1: 3 + (i % 3 === 0 ? 1 : i % 2), q2: 3 + (i % 2), q3: 4 + (i % 4 === 0 ? 0 : 1) - (i % 5 === 0 ? 1 : 0), q4: 2 + (i % 3), q5: 3 + (i % 3 === 1 ? 2 : i % 2), q6: i % 4 === 0 ? 'More practical examples would help.' : '' },
-})))
+export const useActivityStore = create<ActivityState>()((set) => ({
+  forums: {}, subscriptions: {}, starredDiscussions: {}, attempts: {}, feedback: {}, feedbackDone: {}, groups: {}, comments: {},
 
-export const useActivityStore = create<ActivityState>()(
-  persist(
-    (set, get) => {
-      const forumOf = (id: number, news: boolean) => get().forums[id] ?? seedDiscussions(news)
-      const setForum = (id: number, list: Discussion[]) => set((s) => ({ forums: { ...s.forums, [id]: list } }))
-      const mapDisc = (forumId: number, discId: number, fn: (d: Discussion) => Discussion) => setForum(forumId, (get().forums[forumId] ?? []).map((d) => (d.id === discId ? fn(d) : d)))
-      return {
-        forums: {}, subscriptions: {}, starredDiscussions: {}, attempts: {}, feedback: {}, feedbackDone: {}, groups: {}, comments: {},
-        discussions: (id, news) => forumOf(id, news),
-        addDiscussion: (id, news, subject, message, pinned) => {
-          const me = currentUser()
-          const now = new Date().toISOString(); const did = Date.now()
-          setForum(id, [{ id: did, subject, authorId: me.id, author: me.name, createdAt: now, pinned, locked: false, posts: [{ id: did + 1, parentId: null, authorId: me.id, author: me.name, message, at: now }] }, ...forumOf(id, news)])
-        },
-        reply: (id, news, discId, parentId, message) => {
-          const me = currentUser()
-          if (!get().forums[id]) setForum(id, forumOf(id, news))
-          mapDisc(id, discId, (d) => ({ ...d, posts: [...d.posts, { id: Date.now(), parentId, authorId: me.id, author: me.name, message, at: new Date().toISOString() }] }))
-        },
-        editPost: (id, discId, postId, message) => mapDisc(id, discId, (d) => ({ ...d, posts: d.posts.map((p) => (p.id === postId ? { ...p, message } : p)) })),
-        deletePost: (id, discId, postId) => mapDisc(id, discId, (d) => ({ ...d, posts: d.posts.filter((p) => p.id !== postId && p.parentId !== postId) })),
-        setDiscussionFlag: (id, discId, flag, v) => mapDisc(id, discId, (d) => ({ ...d, [flag]: v })),
-        deleteDiscussion: (id, discId) => setForum(id, (get().forums[id] ?? []).filter((d) => d.id !== discId)),
-        toggleSubscription: (id) => set((s) => ({ subscriptions: { ...s.subscriptions, [id]: !s.subscriptions[id] } })),
-        toggleStarDiscussion: (id) => set((s) => ({ starredDiscussions: { ...s.starredDiscussions, [id]: !s.starredDiscussions[id] } })),
+  addDiscussion: (forumId, _news, subject, message, pinned) => { void call(() => api.post(`/api/v1/forums/${forumId}/discussions`, { subject, message, pinned })) },
+  reply: (_forumId, _news, discussionId, parentId, message) => { void call(() => api.post(`/api/v1/discussions/${discussionId}/posts`, { parentId, message })) },
+  editPost: (_f, _d, postId, message) => { void call(() => api.put(`/api/v1/posts/${postId}`, { message })) },
+  deletePost: (_f, _d, postId) => { void call(() => api.delete(`/api/v1/posts/${postId}`)) },
+  setDiscussionFlag: (_f, discussionId, flag, v) => { void call(() => api.put(`/api/v1/discussions/${discussionId}`, { [flag]: v })) },
+  deleteDiscussion: (_f, discussionId) => { void call(() => api.delete(`/api/v1/discussions/${discussionId}`)) },
+  toggleSubscription: (forumId) => {
+    set((s) => ({ subscriptions: { ...s.subscriptions, [forumId]: !s.subscriptions[forumId] } }))
+    void call(() => api.post(`/api/v1/forums/${forumId}/subscription`))
+  },
+  toggleStarDiscussion: (id) => {
+    set((s) => ({ starredDiscussions: { ...s.starredDiscussions, [id]: !s.starredDiscussions[id] } }))
+    void call(() => api.post(`/api/v1/discussions/${id}/star`), { reload: false })
+  },
 
-        startAttempt: (quizId, userId) => {
-          const a: QuizAttempt = { id: Date.now(), userId, startedAt: new Date().toISOString(), finishedAt: null, answers: {}, score: null }
-          set((s) => ({ attempts: { ...s.attempts, [quizId]: [...(s.attempts[quizId] ?? []), a] } }))
-          return a
-        },
-        finishAttempt: (quizId, attemptId, answers) => set((s) => ({
-          attempts: { ...s.attempts, [quizId]: (s.attempts[quizId] ?? []).map((a) => a.id !== attemptId ? a : { ...a, answers, finishedAt: new Date().toISOString(), score: QUIZ_QUESTIONS.filter((q, i) => answers[i] === q.a).length }) },
-        })),
+  startAttempt: async (quizId) => {
+    const res = await call(() => api.post<QuizAttempt>(`/api/v1/quizzes/${quizId}/attempts`), { reload: false })
+    return res?.data
+  },
+  finishAttempt: async (_quizId, attemptId, answers) => {
+    await call(() => api.post(`/api/v1/quiz-attempts/${attemptId}/finish`, { answers }))
+  },
 
-        submitFeedback: (id, userId, answers) => set((s) => ({
-          feedback: { ...s.feedback, [id]: [...(s.feedback[id] ?? seedFeedback()), { at: new Date().toISOString(), answers }] },
-          feedbackDone: { ...s.feedbackDone, [`${id}:${userId}`]: true },
-        })),
+  submitFeedback: async (feedbackId, answers) => !!(await call(() => api.post(`/api/v1/feedback/${feedbackId}/responses`, answers))),
+  joinGroup: async (choiceId, groupId) => !!(await call(() => api.post(`/api/v1/choices/${choiceId}/join`, { groupId }))),
 
-        groupsFor: (id) => get().groups[id] ?? seedGroups(),
-        joinGroup: (id, groupId, member) => set((s) => ({
-          groups: { ...s.groups, [id]: (s.groups[id] ?? seedGroups()).map((g) => ({ ...g, members: g.id === groupId ? [...g.members.filter((m) => m !== member), member] : g.members.filter((m) => m !== member) })) },
-        })),
+  addComment: (activityId, studentId, text) => { void call(() => api.post(`/api/v1/assignments/${activityId}/comments`, { studentId, text })) },
+  deleteComment: (_key, id) => { void call(() => api.delete(`/api/v1/submission-comments/${id}`)) },
+}))
 
-        addComment: (key, authorId, author, text) => set((s) => ({ comments: { ...s.comments, [key]: [...(s.comments[key] ?? []), { id: Date.now(), authorId, author, text, at: new Date().toISOString() }] } })),
-        deleteComment: (key, id) => set((s) => ({ comments: { ...s.comments, [key]: (s.comments[key] ?? []).filter((c) => c.id !== id) } })),
-      }
-    },
-    { name: 'lms-activity-v1' },
-  ),
-)
-
-export const feedbackResponses = (state: ActivityState, id: number) => state.feedback[id] ?? seedFeedback()
+export const feedbackResponses = (state: ActivityState, id: number) => state.feedback[id] ?? NO_FEEDBACK
 
 export function currentUser() {
   const u = useAuthStore.getState().user
   const role = u?.role ?? 'Student'
   const teacher = (role === 'Lecturer' || role === 'Admin') && !useUiStore.getState().viewAsStudent
-  return { id: teacher ? 'l1' : CURRENT_STUDENT_ID, name: u?.fullName ?? 'User', teacher }
+  return { id: u?.userId ?? '', name: u?.fullName ?? 'User', teacher }
 }
 
 export function useMe() {
   const u = useAuthStore((s) => s.user)
   const viewAsStudent = useUiStore((s) => s.viewAsStudent)
   const teacher = (u?.role === 'Lecturer' || u?.role === 'Admin') && !viewAsStudent
-  return { id: teacher ? 'l1' : CURRENT_STUDENT_ID, name: u?.fullName ?? 'User', teacher }
+  return { id: u?.userId ?? '', name: u?.fullName ?? 'User', teacher }
 }

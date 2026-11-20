@@ -34,5 +34,7 @@ public static class AppDbContextSeed
             await userManager.CreateAsync(admin, "Admin@123");
             await userManager.AddToRoleAsync(admin, nameof(UserRole.Admin));
         }
+
+        await DemoDataSeed.SeedAsync(services.GetRequiredService<AppDbContext>(), userManager);
     }
 }

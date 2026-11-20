@@ -9,6 +9,8 @@ import { toast } from '../../../components/Toast'
 import { fmtDate, fmtShort, fmtSize, fromLocalInput, timeLeft, toLocalInput, initials } from '../../../lib/format'
 import { formatDistanceStrict } from 'date-fns'
 import { ActivityNav } from '../../../components/ActivityNav'
+import { call } from '../../../services/sync'
+import { uploadFile, deleteFile, saveSubmission, submitForGrading, removeSubmission, downloadFile } from '../assignApi'
 import { useActivityStore, useMe, type Comment } from '../../../store/activityStore'
 import { useAdminStore, useEnrolled, useCourseIdOfActivity, useExtension, useBlockState, logAudit, nameOf } from '../../../store/adminStore'
 
@@ -32,7 +34,7 @@ function FileChip({ f, onRemove }: { f: SubmissionFile; onRemove?: () => void })
         <div className="text-sm font-medium truncate" style={{ color: 'var(--color-heading)' }}>{f.name}</div>
         <div className="text-xs muted">{fmtSize(f.size)} · {fmtShort(f.uploadedAt)}</div>
       </div>
-      {onRemove ? <button className="icon-btn !w-8 !h-8" onClick={onRemove} aria-label={`Remove ${f.name}`}><X size={16} /></button> : <button className="icon-btn !w-8 !h-8" onClick={() => toast(`Downloading ${f.name}`, 'info')} aria-label="Download"><Download size={16} /></button>}
+      {onRemove ? <button className="icon-btn !w-8 !h-8" onClick={onRemove} aria-label={`Remove ${f.name}`}><X size={16} /></button> : <button className="icon-btn !w-8 !h-8" onClick={() => void downloadFile(f)} aria-label={`Download ${f.name}`}><Download size={16} /></button>}
     </div>
   )
 }
@@ -58,32 +60,40 @@ function DatesHeader({ s }: { s: AssignSettings }) {
 
 function SubmissionEditor({ a, sub, onDone }: { a: Activity; sub: Submission; onDone: () => void }) {
   const s = a.assign!
-  const save = useLmsStore((st) => st.saveSubmission)
-  const [files, setFiles] = useState<SubmissionFile[]>(sub.files)
+  const live = useLmsStore((st) => st.submissions[`${a.id}:${CURRENT_STUDENT_ID}`])
+  const files: SubmissionFile[] = live?.files ?? sub.files
   const [text, setText] = useState(sub.onlineText)
+  const [busy, setBusy] = useState(false)
   const [drag, setDrag] = useState(false)
   const [error, setError] = useState('')
   const input = useRef<HTMLInputElement>(null)
   const accepted = s.acceptedTypes.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)
 
-  const addFiles = (list: FileList | null) => {
+  const addFiles = async (list: FileList | null) => {
     if (!list) return
     setError('')
-    const next = [...files]
+    let count = files.length
+    const valid: File[] = []
     for (const f of Array.from(list)) {
       const ext = '.' + (f.name.split('.').pop() ?? '').toLowerCase()
       if (accepted.length && !accepted.includes(ext)) { setError(`${f.name}: File type ${ext} is not accepted. Accepted file types: ${s.acceptedTypes}`); continue }
       if (f.size > s.maxSizeMb * 1_048_576) { setError(`${f.name} is too large. The maximum size is ${s.maxSizeMb} MB.`); continue }
-      if (next.length >= s.maxFiles) { setError(`You can attach a maximum of ${s.maxFiles} file(s) to this submission.`); break }
-      next.push({ name: f.name, size: f.size, uploadedAt: new Date().toISOString() })
+      if (count >= s.maxFiles) { setError(`You can attach a maximum of ${s.maxFiles} file(s) to this submission.`); break }
+      valid.push(f); count++
     }
-    setFiles(next)
+    if (!valid.length) return
+    setBusy(true)
+    for (const f of valid) await call(() => uploadFile(a.id, f))
+    setBusy(false)
   }
 
-  const submit = () => {
+  const submit = async () => {
     if (s.fileSubmissions && !s.onlineText && files.length === 0) return setError('Nothing was submitted. You must add at least one file.')
     if (s.onlineText && !s.fileSubmissions && !text.trim()) return setError('Online text is required.')
-    save(a.id, CURRENT_STUDENT_ID, { files, onlineText: text, status: s.requireSubmitButton ? 'draft' : 'submitted' })
+    setBusy(true)
+    const ok = await saveSubmission(a.id, text)
+    setBusy(false)
+    if (ok === undefined) return
     toast(s.requireSubmitButton ? 'Changes saved. Remember to click “Submit assignment”.' : 'Submission saved')
     onDone()
   }
@@ -101,22 +111,22 @@ function SubmissionEditor({ a, sub, onDone }: { a: Activity; sub: Submission; on
           <div className="flex items-baseline justify-between mb-1.5"><label className="form-label !mb-0">File submissions</label><span className="text-xs muted">Maximum file size: {s.maxSizeMb} MB, maximum number of files: {s.maxFiles}</span></div>
           <div
             onDragOver={(e) => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)}
-            onDrop={(e) => { e.preventDefault(); setDrag(false); addFiles(e.dataTransfer.files) }}
+            onDrop={(e) => { e.preventDefault(); setDrag(false); void addFiles(e.dataTransfer.files) }}
             onClick={() => input.current?.click()}
             className={`rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${drag ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)]' : 'hover:bg-[var(--color-bg-subtle)]'}`}
             style={{ borderColor: drag ? undefined : 'var(--color-border-strong)' }}>
             <UploadCloud size={36} className="mx-auto" style={{ color: 'var(--color-primary)' }} />
             <div className="mt-2 font-semibold" style={{ color: 'var(--color-heading)' }}>Drag and drop files here, or click to browse</div>
             <div className="text-xs muted mt-1">Accepted file types: {s.acceptedTypes || 'All file types'}</div>
-            <input ref={input} type="file" hidden multiple={s.maxFiles > 1} accept={s.acceptedTypes} onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
+            <input ref={input} type="file" hidden multiple={s.maxFiles > 1} accept={s.acceptedTypes} onChange={(e) => { void addFiles(e.target.files); e.target.value = '' }} />
           </div>
-          {files.length > 0 && <div className="grid sm:grid-cols-2 gap-2 mt-3">{files.map((f, i) => <FileChip key={f.name + i} f={f} onRemove={() => setFiles(files.filter((_, j) => j !== i))} />)}</div>}
+          {files.length > 0 && <div className="grid sm:grid-cols-2 gap-2 mt-3">{files.map((f, i) => <FileChip key={(f.id ?? f.name) + String(i)} f={f} onRemove={() => { if (f.id) void deleteFile(f.id) }} />)}</div>}
         </div>
       )}
 
       {error && <div className="flex items-start gap-2 p-3 rounded-xl text-sm" style={{ background: 'var(--color-red-soft)', color: 'var(--color-red)' }}><AlertTriangle size={16} className="mt-0.5 shrink-0" />{error}</div>}
 
-      <div className="flex gap-2"><button className="btn btn-primary" onClick={submit}><Save size={16} /> Save changes</button><button className="btn btn-secondary" onClick={onDone}>Cancel</button></div>
+      <div className="flex gap-2"><button className="btn btn-primary" disabled={busy} onClick={() => void submit()}><Save size={16} /> {busy ? 'Saving…' : 'Save changes'}</button><button className="btn btn-secondary" onClick={onDone}>Cancel</button></div>
     </div>
   )
 }
@@ -124,7 +134,6 @@ function SubmissionEditor({ a, sub, onDone }: { a: Activity; sub: Submission; on
 function StudentView({ a }: { a: Activity }) {
   const s = a.assign!
   const sub = useLmsStore((st) => st.submissions[`${a.id}:${CURRENT_STUDENT_ID}`]) ?? EMPTY
-  const save = useLmsStore((st) => st.saveSubmission)
   const [editing, setEditing] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -194,7 +203,7 @@ function StudentView({ a }: { a: Activity }) {
       )}
 
       <Modal open={confirmSubmit} title="Submit assignment" onClose={() => setConfirmSubmit(false)}
-        footer={<><button className="btn btn-secondary" onClick={() => setConfirmSubmit(false)}>Cancel</button><button className="btn btn-primary" disabled={!statement} onClick={() => { save(a.id, CURRENT_STUDENT_ID, { status: 'submitted' }); setConfirmSubmit(false); toast('Your assignment has been submitted for grading') }}>Continue</button></>}>
+        footer={<><button className="btn btn-secondary" onClick={() => setConfirmSubmit(false)}>Cancel</button><button className="btn btn-primary" disabled={!statement} onClick={() => { setConfirmSubmit(false); void submitForGrading(a.id).then((ok) => ok !== undefined && toast('Your assignment has been submitted for grading')) }}>Continue</button></>}>
         <p className="text-sm mb-4">Are you sure you want to submit your work for grading? You will not be able to make any more changes.</p>
         <label className="flex items-start gap-3 p-3 rounded-xl cursor-pointer" style={{ background: 'var(--color-bg-subtle)' }}>
           <input type="checkbox" className="mt-0.5 w-4 h-4 accent-[var(--color-primary)]" checked={statement} onChange={(e) => setStatement(e.target.checked)} />
@@ -203,7 +212,7 @@ function StudentView({ a }: { a: Activity }) {
       </Modal>
       <Confirm open={confirmRemove} danger title="Remove submission" confirmLabel="Continue" onClose={() => setConfirmRemove(false)}
         message="Are you sure you want to remove your submission? Your files and online text will be deleted."
-        onConfirm={() => { save(a.id, CURRENT_STUDENT_ID, { status: 'new', files: [], onlineText: '' }); toast('Submission removed') }} />
+        onConfirm={() => { void removeSubmission(a.id).then((ok) => ok !== undefined && toast('Submission removed')) }} />
     </div>
   )
 }
@@ -328,7 +337,7 @@ function SubmissionsTable({ a }: { a: Activity }) {
 function GradeDialog({ a, st, sub, onClose }: { a: Activity; st: Student; sub: Submission; onClose: () => void }) {
   const s = a.assign!
   const grade = useLmsStore((x) => x.gradeSubmission)
-  const save = useLmsStore((x) => x.saveSubmission)
+  const setStatus = useLmsStore((x) => x.setSubmissionStatus)
   const [g, setG] = useState(sub.grade?.toString() ?? '')
   const [f, setF] = useState(sub.feedback)
   const commit = () => {
@@ -338,7 +347,7 @@ function GradeDialog({ a, st, sub, onClose }: { a: Activity; st: Student; sub: S
   }
   return (
     <Modal open title={`Grade · ${st.name}`} onClose={onClose} width={640}
-      footer={<>{sub.status === 'submitted' && <button className="btn btn-secondary mr-auto" onClick={() => { save(a.id, st.id, { status: 'draft' }); toast('Submission reverted to draft'); onClose() }}>Revert the submission to draft</button>}<button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={commit}>Save changes</button></>}>
+      footer={<>{sub.status === 'submitted' && <button className="btn btn-secondary mr-auto" onClick={() => { setStatus(a.id, st.id, 'draft'); toast('Submission reverted to draft'); onClose() }}>Revert the submission to draft</button>}<button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={commit}>Save changes</button></>}>
       <div className="space-y-4">
         <div className="flex flex-wrap gap-2"><span className={`badge ${sub.status === 'submitted' ? 'badge-green' : 'badge-gray'}`}>{sub.status === 'submitted' ? 'Submitted for grading' : 'No submission'}</span><span className="badge badge-gray">Last modified {fmtShort(sub.modifiedAt)}</span></div>
         {sub.files.length > 0 && <div className="grid gap-2">{sub.files.map((x, i) => <FileChip key={i} f={x} />)}</div>}
@@ -452,7 +461,7 @@ export function SubmissionComments({ k }: { k: string }) {
             </div>
           ))}
           <textarea rows={2} className="form-control" placeholder="Add a comment…" value={text} onChange={(e) => setText(e.target.value)} />
-          <div className="flex gap-2"><button className="btn btn-primary btn-sm" disabled={!text.trim()} onClick={() => { add(k, me.id, me.name, text.trim()); setText('') }}>Save comment</button><button className="btn btn-secondary btn-sm" onClick={() => { setText(''); setOpen(false) }}>Cancel</button></div>
+          <div className="flex gap-2"><button className="btn btn-primary btn-sm" disabled={!text.trim()} onClick={() => { const [aid, sid] = k.split(':'); add(Number(aid), sid, text.trim()); setText('') }}>Save comment</button><button className="btn btn-secondary btn-sm" onClick={() => { setText(''); setOpen(false) }}>Cancel</button></div>
         </div>
       )}
     </div>

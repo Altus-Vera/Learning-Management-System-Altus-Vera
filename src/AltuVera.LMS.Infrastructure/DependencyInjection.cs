@@ -2,6 +2,7 @@ using AltuVera.LMS.Application.Common.Interfaces;
 using AltuVera.LMS.Domain.Entities.Users;
 using AltuVera.LMS.Infrastructure.Data;
 using AltuVera.LMS.Infrastructure.Identity;
+using AltuVera.LMS.Infrastructure.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -29,6 +30,7 @@ public static class DependencyInjection
         .AddDefaultTokenProviders();
 
         services.AddScoped<ITokenService, TokenService>();
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
 
         return services;
     }

@@ -22,9 +22,6 @@ const LKR = (n: number) => `LKR ${n.toLocaleString()}`
 
 function Shell({ title, subtitle, actions, children }: { title: string; subtitle: string; actions?: ReactNode; children: ReactNode }) {
   const ok = useIsRegistrar()
-  const ensure = useAdminStore((s) => s.ensurePayments)
-  const courses = useLmsStore((s) => s.courses)
-  useEffect(() => { ensure(courses.map((c) => c.id)) }, [courses, ensure])
   if (!ok) return <Navigate to="/dashboard" replace />
   return (
     <div className="space-y-6">
@@ -162,7 +159,7 @@ export function AdminStudents() {
 
   return (
     <Shell title="Batches & students" subtitle="Block or unblock students for unpaid fees or other reasons. Blocked students cannot access courses or submit work."
-      actions={<button className="btn btn-danger btn-sm" onClick={() => { const n = st.blockAllUnpaid(); toast(n ? `${n} course access(es) blocked for unpaid fees` : 'No unpaid students to block', n ? 'success' : 'info') }}><Ban size={15} /> Block all unpaid</button>}>
+      actions={<button className="btn btn-danger btn-sm" onClick={() => { void st.blockAllUnpaid().then((n) => toast(n ? `${n} course access(es) blocked for unpaid fees` : 'No unpaid students to block', n ? 'success' : 'info')) }}><Ban size={15} /> Block all unpaid</button>}>
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 p-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 muted" /><input className="form-control pl-9 !h-9 !w-64" placeholder="Search name, email or index number" value={q} onChange={(e) => setQ(e.target.value)} /></div>
@@ -170,7 +167,7 @@ export function AdminStudents() {
           <select className="form-control !w-auto !h-9" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="all">All statuses</option><option value="active">Active</option><option value="unpaid">Has unpaid fees</option><option value="blocked">Blocked</option></select>
           {sel.length > 0 && <div className="ml-auto flex items-center gap-2"><span className="text-sm muted">{sel.length} selected</span>
             <button className="btn btn-danger btn-sm" onClick={() => setBlockFor(sel)}><Ban size={14} /> Block</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => { st.unblockAccount(sel.filter((id) => st.accountBlocks[id])); sel.forEach((id) => courseBlocksOf(id).forEach(([k]) => st.unblockCourse(Number(k.split(':')[0]), [id]))); setSel([]); toast('Selected students unblocked') }}><Unlock size={14} /> Unblock</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => { st.unblockAll(sel); setSel([]); toast('Selected students unblocked') }}><Unlock size={14} /> Unblock</button>
           </div>}
         </div>
         <div className="overflow-x-auto">
@@ -192,7 +189,7 @@ export function AdminStudents() {
                     <td className="px-4 py-3">{ab ? <span className="badge badge-red" title={ab.reason}><Ban size={12} /> Account blocked</span> : cb.length ? <span className="badge badge-red" title={cb.map(([, b]) => b.reason).join('\n')}><Ban size={12} /> {cb.length} course(s) blocked</span> : <span className="badge badge-green"><CheckCircle2 size={12} /> Active</span>}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {ab || cb.length
-                        ? <button className="btn btn-secondary btn-sm" onClick={() => { if (ab) st.unblockAccount([s.id]); cb.forEach(([k]) => st.unblockCourse(Number(k.split(':')[0]), [s.id])); toast(`${s.name} unblocked`) }}><Unlock size={14} /> Unblock</button>
+                        ? <button className="btn btn-secondary btn-sm" onClick={() => { st.unblockAll([s.id]); toast(`${s.name} unblocked`) }}><Unlock size={14} /> Unblock</button>
                         : <button className="btn btn-secondary btn-sm" onClick={() => setBlockFor([s.id])}><Ban size={14} /> Block</button>}
                     </td>
                   </tr>
@@ -289,7 +286,7 @@ export function AdminEnrolment() {
   const batchStudents = st.students.filter((s) => s.batchId === batch)
   const [sel, setSel] = useState<string[]>([])
   const [lecturer, setLecturer] = useState('')
-  useEffect(() => { setSel(batchStudents.filter((s) => !enrolled.includes(s.id)).map((s) => s.id)); setLecturer(st.courseLecturers[courseId] ?? course?.lecturer ?? '') }, [courseId, batch]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setSel(batchStudents.filter((s) => !enrolled.includes(s.id)).map((s) => s.id)); setLecturer(course?.lecturerId ?? LECTURERS.find((l) => l.name === (st.courseLecturers[courseId] ?? course?.lecturer))?.id ?? '') }, [courseId, batch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Shell title="Course assignment" subtitle="Assign courses and coursework to a batch by selecting the students to enrol, and set the course lecturer.">
@@ -297,8 +294,8 @@ export function AdminEnrolment() {
         <section className="card p-5 space-y-4 h-fit">
           <div><label className="form-label">Course</label><select className="form-control" value={courseId} onChange={(e) => setCourseId(Number(e.target.value))}>{courses.map((c) => <option key={c.id} value={c.id}>{c.shortName}-{c.fullName}</option>)}</select></div>
           <div><label className="form-label">Lecturer in charge</label>
-            <div className="flex gap-2"><select className="form-control" value={lecturer} onChange={(e) => setLecturer(e.target.value)}>{LECTURERS.map((l) => <option key={l}>{l}</option>)}</select>
-              <button className="btn btn-primary !px-3" disabled={lecturer === (st.courseLecturers[courseId] ?? course?.lecturer)} onClick={() => { st.setLecturer(courseId, lecturer); toast('Lecturer assigned') }} aria-label="Save lecturer"><UserCheck size={16} /></button></div>
+            <div className="flex gap-2"><select className="form-control" value={lecturer} onChange={(e) => setLecturer(e.target.value)}>{LECTURERS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
+              <button className="btn btn-primary !px-3" disabled={!lecturer || lecturer === course?.lecturerId} onClick={() => { st.setLecturer(courseId, lecturer); toast('Lecturer assigned') }} aria-label="Save lecturer"><UserCheck size={16} /></button></div>
           </div>
           <div><label className="form-label">Batch</label><select className="form-control" value={batch} onChange={(e) => setBatch(e.target.value)}>{BATCHES.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
           <div className="p-4 rounded-xl text-sm space-y-1" style={{ background: 'var(--color-bg-subtle)' }}>
@@ -338,8 +335,6 @@ export function AdminSubmissions() {
   const st = useAdminStore()
   const courses = useLmsStore((s) => s.courses)
   const subs = useLmsStore((s) => s.submissions)
-  const grade = useLmsStore((s) => s.gradeSubmission)
-  const save = useLmsStore((s) => s.saveSubmission)
   const [courseId, setCourseId] = useState<number>(courses[0]?.id ?? 0)
   const course = courses.find((c) => c.id === courseId)
   const assigns = useMemo(() => course?.sections.flatMap((s) => s.activities.filter((a) => a.type === 'assign')) ?? [], [course])
@@ -386,15 +381,7 @@ export function AdminSubmissions() {
       </div>
       {edit && a && <OverrideDialog key={edit.sid} activityId={a.id} maxGrade={a.assign!.maxGrade} dueDate={a.assign!.dueDate} sid={edit.sid} sub={edit.sub} onClose={() => setEdit(null)}
         onSave={(g, f, status, ext) => {
-          const key = `${a.id}:${edit.sid}`; const who = st.students.find((x) => x.id === edit.sid)?.name ?? edit.sid
-          if (g !== edit.sub.grade || f !== edit.sub.feedback) {
-            st.markOverride(key, edit.sub.grade === null ? 'Not graded' : String(edit.sub.grade))
-            grade(a.id, edit.sid, g, f)
-            st.log('override', who, `${a.name}: grade changed from ${edit.sub.grade ?? '-'} to ${g ?? '-'}`)
-          }
-          if (status !== edit.sub.status) { save(a.id, edit.sid, { status }); st.log('status', who, `${a.name}: status changed from ${edit.sub.status} to ${status}`) }
-          if (ext !== (st.extensions[key] ?? null)) st.setExtension(a.id, edit.sid, ext)
-          setEdit(null); toast('Changes saved and logged')
+          void st.overrideSubmission(a.id, edit.sid, { grade: g, feedback: f, status, extensionUntil: ext }).then((ok) => { if (ok) { setEdit(null); toast('Changes saved and logged') } })
         }} />}
     </Shell>
   )

@@ -69,7 +69,7 @@ export function FeedbackView({ a }: { a: Activity }) {
   const send = () => {
     const missing = FEEDBACK_QUESTIONS.filter((q) => q.type === 'rating' && answers[q.id] === undefined)
     if (missing.length) return setErr('There are required fields in this form that must be completed.')
-    submit(a.id, me.id, answers); toast('Your answers have been saved. Thank you.')
+    void submit(a.id, answers).then((ok) => ok && toast('Your answers have been saved. Thank you.'))
   }
   return (
     <div className="space-y-4">
@@ -129,11 +129,11 @@ export function ChoiceGroupView({ a }: { a: Activity }) {
       </div>
       {!me.teacher && (
         <div className="flex gap-2">
-          <button className="btn btn-primary" disabled={pick === null || pick === mine?.id} onClick={() => { join(a.id, pick, me.name); toast('Your selection has been saved') }}><Save size={15} /> Save my choice</button>
+          <button className="btn btn-primary" disabled={pick === null || pick === mine?.id} onClick={() => { void join(a.id, pick).then((ok) => ok && toast('Your selection has been saved')) }}><Save size={15} /> Save my choice</button>
           {mine && <button className="btn btn-secondary" onClick={() => setConfirmRemove(true)}>Remove my choice</button>}
         </div>
       )}
-      <Confirm open={confirmRemove} title="Remove my choice" confirmLabel="Remove" message={`Remove yourself from ${mine?.name}?`} onConfirm={() => { join(a.id, null, me.name); setPick(null); toast('Your choice has been removed') }} onClose={() => setConfirmRemove(false)} />
+      <Confirm open={confirmRemove} title="Remove my choice" confirmLabel="Remove" message={`Remove yourself from ${mine?.name}?`} onConfirm={() => { void join(a.id, null).then((ok) => { if (ok) { setPick(null); toast('Your choice has been removed') } }) }} onClose={() => setConfirmRemove(false)} />
     </div>
   )
 }

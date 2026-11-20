@@ -41,7 +41,9 @@ echo  ======================================================
 echo    System is running.
 echo    API  : http://localhost:5100
 echo    Web  : http://localhost:5101
-echo    Login: admin@altusvera.lms  /  Admin@123
+echo    Registrar: admin@altusvera.lms             /  Admin@123
+echo    Lecturer : kperera@altusvera.lk            /  Lecturer@123
+echo    Student  : dvdsilva@students.altusvera.lk  /  Student@123
 echo  ======================================================
 echo.
 echo  Close this window to keep servers running in background.
