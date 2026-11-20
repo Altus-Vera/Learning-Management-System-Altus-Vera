@@ -1,7 +1,17 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type ActivityType = 'assign' | 'resource' | 'forum' | 'quiz' | 'url' | 'folder' | 'choice'
+export type ActivityType = 'assign' | 'resource' | 'forum' | 'quiz' | 'url' | 'folder' | 'choice' | 'feedback' | 'page' | 'label'
+
+export interface QuizSettings {
+  openDate: string | null
+  closeDate: string | null
+  timeLimitMins: number
+  attemptsAllowed: number
+  gradingMethod: 'Highest grade' | 'Average grade' | 'First attempt' | 'Last attempt'
+  maxGrade: number
+  reviewAfterClose: boolean
+}
 
 export interface AssignSettings {
   allowSubmissionsFrom: string | null
@@ -38,6 +48,8 @@ export interface Activity {
   description?: string
   visible: boolean
   assign?: AssignSettings
+  quiz?: QuizSettings
+  content?: string
 }
 
 export interface Section { id: number; title: string; summary?: string; activities: Activity[] }
@@ -83,6 +95,17 @@ const assign = (p: Partial<AssignSettings>): AssignSettings => ({
   ...p,
 })
 
+export const quizDefaults = (p: Partial<QuizSettings> = {}): QuizSettings => ({
+  openDate: d(-1, 8, 0),
+  closeDate: d(5, 23, 59),
+  timeLimitMins: 30,
+  attemptsAllowed: 1,
+  gradingMethod: 'Highest grade',
+  maxGrade: 10,
+  reviewAfterClose: true,
+  ...p,
+})
+
 let aid = 1000
 const notes = (n: number, visibleUpTo: number): Activity[] =>
   Array.from({ length: n }, (_, i) => ({
@@ -106,9 +129,13 @@ const buildSections = (code: string): Section[] => [
   {
     id: 1, title: 'General', summary: 'Course announcements and module information.',
     activities: [
-      { id: aid++, type: 'forum', name: 'Announcements', visible: true, description: 'General news and announcements from the module lecturer.' },
+      { id: aid++, type: 'label', name: 'Welcome', visible: true, content: `Welcome to ${code}! Please read the module handbook before the first lecture. Lecture recordings are available on MS Teams within 24 hours.` },
+      { id: aid++, type: 'forum', name: 'Announcements', visible: true, description: 'General news and announcements' },
+      { id: aid++, type: 'forum', name: 'Discussion Forum', visible: true, description: 'Ask questions and discuss the module with your peers.' },
+      { id: aid++, type: 'page', name: 'Module Information', visible: true, content: `Module code: ${code}\nCredits: 3\nAssessment: Coursework 40% · Final examination 60%\n\nLearning outcomes\n• Analyse key concepts covered in the module.\n• Apply theory to practical case studies.\n• Communicate findings clearly in written and oral form.\n\nLecture schedule\nMonday 08:30 – 10:30 · Hall C2-004\nTutorial: Wednesday 13:00 – 14:00` },
       { id: aid++, type: 'resource', name: `${code} Module Outline`, visible: true },
       { id: aid++, type: 'url', name: 'Recorded Lectures (MS Teams)', visible: true },
+      { id: aid++, type: 'feedback', name: 'Student Feedback Form', visible: true, description: 'Please rate this module. The feedback is anonymous and helps us improve the course.' },
     ],
   },
   { id: 2, title: 'Lecture Notes', activities: notes(10, 8) },
@@ -122,7 +149,13 @@ const buildSections = (code: string): Section[] => [
       { id: aid++, type: 'assign', name: 'Assignment Final Report Submission', visible: true, description: 'Submit the final report. Turnitin similarity must be below 20%.', assign: assign({ dueDate: d(10), cutOffDate: d(12), maxSizeMb: 50 }) },
     ],
   },
-  { id: 5, title: 'Quizzes', activities: [{ id: aid++, type: 'quiz', name: 'Mid-term Quiz', visible: true, description: '20 MCQ questions · 30 minutes · 1 attempt' }] },
+  {
+    id: 5, title: 'Quizzes', activities: [
+      { id: aid++, type: 'quiz', name: 'In-class Test 01', visible: true, description: 'The test covers lectures 1–4.', quiz: quizDefaults({ openDate: d(-20, 8, 30), closeDate: d(-20, 9, 30), timeLimitMins: 45 }) },
+      { id: aid++, type: 'quiz', name: 'Mid-term Quiz', visible: true, description: 'Answer all questions. You have two attempts; the highest grade counts.', quiz: quizDefaults({ attemptsAllowed: 2 }) },
+      { id: aid++, type: 'folder', name: 'Past Papers', visible: true },
+    ],
+  },
   { id: 6, title: 'Topic 6', activities: [] },
 ]
 
@@ -197,6 +230,7 @@ interface LmsState {
   deleteActivity: (activityId: number) => void
   addActivity: (courseId: number, sectionId: number, type: ActivityType, name: string) => void
   updateAssign: (activityId: number, patch: Partial<AssignSettings>) => void
+  updateActivity: (activityId: number, patch: Partial<Activity>) => void
   saveSubmission: (activityId: number, studentId: string, patch: Partial<Submission>) => void
   gradeSubmission: (activityId: number, studentId: string, grade: number | null, feedback: string) => void
   addEvent: (e: Omit<LmsEvent, 'id'>) => void
@@ -243,10 +277,11 @@ export const useLmsStore = create<LmsState>()(
               sections: c.sections.map((sec) =>
                 sec.id !== sectionId ? sec : {
                   ...sec,
-                  activities: [...sec.activities, { id: Date.now(), type, name, visible: true, description: '', assign: type === 'assign' ? assign({}) : undefined }],
+                  activities: [...sec.activities, { id: Date.now(), type, name, visible: true, description: '', assign: type === 'assign' ? assign({}) : undefined, quiz: type === 'quiz' ? quizDefaults() : undefined, content: type === 'page' || type === 'label' ? name : undefined }],
                 }),
             }),
         })),
+      updateActivity: (id, patch) => set((s) => ({ courses: mapActivity(s.courses, id, (a) => ({ ...a, ...patch })) })),
       updateAssign: (id, patch) => set((s) => ({ courses: mapActivity(s.courses, id, (a) => ({ ...a, assign: { ...a.assign!, ...patch } })) })),
       saveSubmission: (id, studentId, patch) =>
         set((s) => {
@@ -264,7 +299,7 @@ export const useLmsStore = create<LmsState>()(
       deleteEvent: (id) => set((s) => ({ events: s.events.filter((e) => e.id !== id) })),
       reset: () => set(fresh()),
     }),
-    { name: 'lms-data-v1' },
+    { name: 'lms-data-v2' },
   ),
 )
 
@@ -274,7 +309,7 @@ export const findActivity = (courses: Course[], id: number) => {
 }
 
 export const courseProgress = (course: Course, completion: Record<string, boolean>) => {
-  const all = course.sections.flatMap((s) => s.activities.filter((a) => a.visible))
+  const all = course.sections.flatMap((s) => s.activities.filter((a) => a.visible && a.type !== 'label'))
   if (!all.length) return 0
   return Math.round((all.filter((a) => completion[a.id]).length / all.length) * 100)
 }

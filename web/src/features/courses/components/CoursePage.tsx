@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
-import { ChevronDown, Eye, EyeOff, Pencil, Trash2, Plus, Check, Circle, ChevronsDownUp, ChevronsUpDown, Users, BookOpen, GraduationCap, Search, Star, Settings2 } from 'lucide-react'
+import { ChevronDown, Eye, EyeOff, Pencil, Trash2, Plus, Check, Circle, ChevronsDownUp, ChevronsUpDown, Users, BookOpen, GraduationCap, Search, Star, Settings2, ClipboardCheck, ListChecks, MessagesSquare, Vote, FileText, Award } from 'lucide-react'
 import { useLmsStore, courseProgress, assignPhase, CURRENT_STUDENT_ID, STUDENTS, type Activity, type ActivityType, type Course, type Section } from '../../../store/lmsStore'
 import { useRole } from '../../../store/uiStore'
 import { ActivityIcon, activityLabel } from '../../../components/ActivityIcon'
@@ -9,6 +9,9 @@ import { toast } from '../../../components/Toast'
 import { fmtShort } from '../../../lib/format'
 import { CourseBanner } from '../../dashboard/components/CourseCard'
 import { CourseGrades } from '../../grades/components/GradesPage'
+import { useActivityStore, seedGroups } from '../../../store/activityStore'
+import { useAuthStore } from '../../../store/authStore'
+import { ActivityIndex } from './ActivityIndex'
 
 function AssignMeta({ a }: { a: Activity }) {
   const submissions = useLmsStore((s) => s.submissions)
@@ -47,6 +50,33 @@ function AssignMeta({ a }: { a: Activity }) {
   )
 }
 
+const AUTO: Partial<Record<ActivityType, string>> = { assign: 'Make a submission', quiz: 'Receive a grade', feedback: 'Submit feedback', choice: 'Make a choice' }
+
+function LabelRow({ a, editMode, onDelete, confirm, setConfirm }: { a: Activity; editMode: boolean; onDelete: () => void; confirm: boolean; setConfirm: (v: boolean) => void }) {
+  const update = useLmsStore((s) => s.updateActivity)
+  const setVisible = useLmsStore((s) => s.setActivityVisible)
+  const del = useLmsStore((s) => s.deleteActivity)
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(a.content ?? '')
+  return (
+    <div className={`px-5 py-4 ${!a.visible ? 'opacity-60' : ''}`}>
+      {editing ? (
+        <div className="space-y-2"><textarea rows={3} className="form-control" value={text} onChange={(e) => setText(e.target.value)} autoFocus /><div className="flex gap-2"><button className="btn btn-primary btn-sm" onClick={() => { update(a.id, { content: text }); setEditing(false); toast('Changes saved') }}>Save</button><button className="btn btn-secondary btn-sm" onClick={() => setEditing(false)}>Cancel</button></div></div>
+      ) : (
+        <div className="flex items-start gap-3">
+          <div className="flex-1 p-4 rounded-xl text-[15px] leading-relaxed whitespace-pre-line" style={{ background: 'var(--color-primary-soft)', color: 'var(--color-heading)' }}>{a.content}{!a.visible && <span className="badge badge-gray ml-2">Hidden from students</span>}</div>
+          {editMode && <div className="flex gap-0.5">
+            <button className="icon-btn !w-8 !h-8" title="Edit" onClick={() => { setText(a.content ?? ''); setEditing(true) }}><Pencil size={15} /></button>
+            <button className="icon-btn !w-8 !h-8" title={a.visible ? 'Hide' : 'Show'} onClick={() => setVisible(a.id, !a.visible)}>{a.visible ? <Eye size={15} /> : <EyeOff size={15} />}</button>
+            <button className="icon-btn !w-8 !h-8" title="Delete" onClick={onDelete}><Trash2 size={15} /></button>
+          </div>}
+        </div>
+      )}
+      <Confirm open={confirm} danger title="Delete text and media area?" confirmLabel="Delete" message="Are you sure you want to delete this text and media area?" onConfirm={() => { del(a.id); toast('Deleted') }} onClose={() => setConfirm(false)} />
+    </div>
+  )
+}
+
 function ActivityRow({ course, a }: { course: Course; a: Activity }) {
   const { isTeacher } = useRole()
   const editMode = useLmsStore((s) => s.editMode) && isTeacher
@@ -59,11 +89,19 @@ function ActivityRow({ course, a }: { course: Course; a: Activity }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(a.name)
   const [confirm, setConfirm] = useState(false)
+  const activity = useActivityStore()
+  const myName = useAuthStore((s) => s.user?.fullName ?? '')
 
   if (!a.visible && !isTeacher) return null
+  if (a.type === 'label') return <LabelRow a={a} editMode={editMode} onDelete={() => setConfirm(true)} confirm={confirm} setConfirm={setConfirm} />
   const link = a.type === 'assign' ? `/courses/${course.id}/assign/${a.id}` : `/courses/${course.id}/mod/${a.id}`
-  const autoDone = a.type === 'assign' && submissions[`${a.id}:${CURRENT_STUDENT_ID}`]?.status === 'submitted'
-  const isDone = a.type === 'assign' ? autoDone : done
+  const auto = AUTO[a.type]
+  const autoDone = a.type === 'assign' ? submissions[`${a.id}:${CURRENT_STUDENT_ID}`]?.status === 'submitted'
+    : a.type === 'quiz' ? !!activity.attempts[a.id]?.some((x) => x.userId === CURRENT_STUDENT_ID && x.finishedAt)
+    : a.type === 'feedback' ? !!activity.feedbackDone[`${a.id}:${CURRENT_STUDENT_ID}`]
+    : a.type === 'choice' ? (activity.groups[a.id] ?? seedGroups()).some((g) => g.members.includes(myName))
+    : false
+  const isDone = auto ? autoDone : done
 
   return (
     <div id={`a${a.id}`} className={`group flex items-start gap-4 px-5 py-4 transition-colors hover:bg-[var(--color-bg-card-hover)] ${!a.visible ? 'opacity-60' : ''}`}>
@@ -79,7 +117,7 @@ function ActivityRow({ course, a }: { course: Course; a: Activity }) {
         )}
         {!a.visible && <span className="badge badge-gray ml-2 align-middle">Hidden from students</span>}
         {a.type === 'assign' && <AssignMeta a={a} />}
-        {a.type === 'quiz' && a.description && <div className="text-xs muted mt-1">{a.description}</div>}
+        {a.type === 'quiz' && a.quiz && <div className="flex flex-wrap gap-2 mt-2">{a.quiz.openDate && <span className="text-xs muted">{new Date(a.quiz.openDate) > new Date() ? 'Opens' : 'Opened'}: {fmtShort(a.quiz.openDate)}</span>}{a.quiz.closeDate && <span className="text-xs muted">· {new Date(a.quiz.closeDate) < new Date() ? 'Closed' : 'Closes'}: {fmtShort(a.quiz.closeDate)}</span>}</div>}
       </div>
 
       {editMode ? (
@@ -90,8 +128,8 @@ function ActivityRow({ course, a }: { course: Course; a: Activity }) {
           <button className="icon-btn !w-8 !h-8 hover:!text-[var(--color-red)]" title="Delete" onClick={() => setConfirm(true)}><Trash2 size={15} /></button>
         </div>
       ) : !isTeacher && (
-        a.type === 'assign' ? (
-          <span className={`badge ${isDone ? 'badge-green' : 'badge-gray'} shrink-0`}>{isDone ? <><Check size={12} strokeWidth={3} /> Done: Make a submission</> : 'To do: Make a submission'}</span>
+        auto ? (
+          <span className={`badge ${isDone ? 'badge-green' : 'badge-gray'} shrink-0`}>{isDone ? <><Check size={12} strokeWidth={3} /> Done: {auto}</> : `To do: ${auto}`}</span>
         ) : (
           <button onClick={() => toggleCompletion(a.id)} className={`btn btn-sm shrink-0 ${isDone ? 'btn-green' : 'btn-secondary'}`}>
             {isDone ? <><Check size={14} strokeWidth={3} /> Done</> : <><Circle size={13} /> Mark as done</>}
@@ -146,7 +184,7 @@ function SectionCard({ course, section, open, onToggle }: { course: Course; sect
       <Modal open={adding} title={`Add an activity or resource to “${section.title}”`} onClose={() => setAdding(false)} width={620}
         footer={<><button className="btn btn-secondary" onClick={() => setAdding(false)}>Cancel</button><button className="btn btn-primary" disabled={!newName.trim()} onClick={() => { addActivity(course.id, section.id, newType, newName.trim()); setAdding(false); toast(`${activityLabel(newType)} added`) }}>Save and return to course</button></>}>
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-5">
-          {(['assign', 'quiz', 'forum', 'resource', 'url', 'folder', 'choice'] as ActivityType[]).map((t) => (
+          {(['assign', 'quiz', 'forum', 'feedback', 'choice', 'resource', 'folder', 'page', 'url', 'label'] as ActivityType[]).map((t) => (
             <button key={t} onClick={() => setNewType(t)} className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-colors ${newType === t ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)]' : 'border-transparent hover:bg-[var(--color-bg-subtle)]'}`}>
               <ActivityIcon type={t} size={44} />
               <span className="text-xs font-semibold" style={{ color: 'var(--color-heading)' }}>{activityLabel(t)}</span>
@@ -179,7 +217,7 @@ function Participants({ course }: { course: Course }) {
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                <td className="px-5 py-3"><div className="flex items-center gap-3"><span className="w-8 h-8 rounded-full grid place-items-center text-xs font-bold" style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary)' }}>{r.name.split(' ').map((p) => p[0]).join('').slice(0, 2)}</span><span className="font-medium" style={{ color: 'var(--color-heading)' }}>{r.name}</span></div></td>
+                <td className="px-5 py-3"><div className="flex items-center gap-3"><span className="w-8 h-8 rounded-full grid place-items-center text-xs font-bold" style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary)' }}>{r.name.split(' ').map((p) => p[0]).join('').slice(0, 2)}</span><Link to={`/user/${r.id}`} className="font-medium hover:underline" style={{ color: 'var(--color-heading)' }}>{r.name}</Link></div></td>
                 <td className="px-5 py-3 muted">{r.email}</td>
                 <td className="px-5 py-3"><span className={`badge ${r.role === 'Lecturer' ? 'badge-amber' : 'badge-blue'}`}>{r.role}</span></td>
                 <td className="px-5 py-3 muted">{r.role === 'Student' ? `Group ${(i % 3) + 1}` : 'No groups'}</td>
@@ -196,7 +234,7 @@ function Participants({ course }: { course: Course }) {
 export function CoursePage() {
   const { courseId } = useParams()
   const [params, setParams] = useSearchParams()
-  const tab = (params.get('tab') ?? 'course') as 'course' | 'participants' | 'grades'
+  const tab = params.get('tab') ?? 'course'
   const course = useLmsStore((s) => s.courses.find((c) => c.id === Number(courseId)))
   const completion = useLmsStore((s) => s.completion)
   const editMode = useLmsStore((s) => s.editMode)
@@ -246,13 +284,13 @@ export function CoursePage() {
           )}
         </div>
         <div className="flex gap-1 px-4 border-t overflow-x-auto" style={{ borderColor: 'var(--color-border)' }}>
-          {([['course', 'Course', BookOpen], ['participants', 'Participants', Users], ['grades', 'Grades', GraduationCap]] as const).map(([k, l, Icon]) => (
+          {([['course', 'Course', BookOpen], ['participants', 'Participants', Users], ['grades', 'Grades', GraduationCap], ['assign', 'Assignments', ClipboardCheck], ['quiz', 'Quizzes', ListChecks], ['forum', 'Forums', MessagesSquare], ['choice', 'Group choices', Vote], ['resource', 'Resources', FileText], ['badges', 'Badges', Award]] as const).map(([k, l, Icon]) => (
             <button key={k} onClick={() => setTab(k)} className={`tab flex items-center gap-2 ${tab === k ? 'tab-active' : ''}`}><Icon size={16} />{l}</button>
           ))}
         </div>
       </div>
 
-      {tab === 'participants' ? <Participants course={course} /> : tab === 'grades' ? <CourseGrades course={course} /> : (
+      {['assign', 'quiz', 'forum', 'choice', 'resource', 'badges'].includes(tab) ? <ActivityIndex course={course} kind={tab as 'assign'} /> : tab === 'participants' ? <Participants course={course} /> : tab === 'grades' ? <CourseGrades course={course} /> : (
         <div className="grid xl:grid-cols-[260px_minmax(0,1fr)] gap-6">
           <aside className="hidden xl:block">
             <div className="card p-4 sticky top-24">

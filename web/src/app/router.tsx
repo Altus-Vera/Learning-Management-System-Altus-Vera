@@ -11,7 +11,12 @@ const GradesPage    = lazy(() => import('../features/grades/components/GradesPag
 const CalendarPage  = lazy(() => import('../features/calendar/components/CalendarPage'))
 const CoursesPage   = lazy(() => import('../features/misc/pages').then((m) => ({ default: m.CoursesPage })))
 const SiteHomePage  = lazy(() => import('../features/misc/pages').then((m) => ({ default: m.SiteHomePage })))
-const ProfilePage   = lazy(() => import('../features/misc/pages').then((m) => ({ default: m.ProfilePage })))
+const ProfilePage   = lazy(() => import('../features/user/ProfilePage').then((m) => ({ default: m.ProfilePage })))
+const BadgesPage    = lazy(() => import('../features/user/ProfilePage').then((m) => ({ default: m.BadgesPage })))
+const SearchPage    = lazy(() => import('../features/user/ProfilePage').then((m) => ({ default: m.CourseSearchPage })))
+const NotificationsPage = lazy(() => import('../features/user/NotificationsPage'))
+const PrefsHub      = lazy(() => import('../features/user/PreferencesPages').then((m) => ({ default: m.PreferencesHub })))
+const PrefsSection  = lazy(() => import('../features/user/PreferencesPages').then((m) => ({ default: m.PreferencesSection })))
 const FilesPage     = lazy(() => import('../features/misc/pages').then((m) => ({ default: m.FilesPage })))
 const InfoPage      = lazy(() => import('../features/misc/pages').then((m) => ({ default: m.InfoPage })))
 
@@ -41,6 +46,12 @@ export const router = createBrowserRouter([
       { path: '/grades/:courseId', element: <Navigate to="/grades" replace /> },
       { path: '/calendar', element: s(<CalendarPage />) },
       { path: '/profile', element: s(<ProfilePage />) },
+      { path: '/user/:userId', element: s(<ProfilePage />) },
+      { path: '/badges', element: s(<BadgesPage />) },
+      { path: '/search', element: s(<SearchPage />) },
+      { path: '/notifications', element: s(<NotificationsPage />) },
+      { path: '/preferences', element: s(<PrefsHub />) },
+      { path: '/preferences/:section', element: s(<PrefsSection />) },
       { path: '/files', element: s(<FilesPage />) },
       { path: '/page/:slug', element: s(<InfoPage />) },
       { path: '*', element: <Navigate to="/dashboard" replace /> },

@@ -1,13 +1,10 @@
 import { useRef, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { Mail, MapPin, Clock, UploadCloud, FileText, Trash2, Download, Library, ScrollText, MessageSquareWarning, Send, Megaphone, RotateCcw } from 'lucide-react'
+import { UploadCloud, FileText, Trash2, Download, Library, ScrollText, MessageSquareWarning, Send, Megaphone } from 'lucide-react'
 import { useLmsStore } from '../../store/lmsStore'
-import { useAuthStore } from '../../store/authStore'
-import { useRole } from '../../store/uiStore'
 import { CourseCard } from '../dashboard/components/CourseCard'
-import { Confirm } from '../../components/Modal'
 import { toast } from '../../components/Toast'
-import { fmtShort, fmtSize, initials } from '../../lib/format'
+import { fmtShort, fmtSize } from '../../lib/format'
 
 export function CoursesPage() {
   const courses = useLmsStore((s) => s.courses)
@@ -54,50 +51,6 @@ export function SiteHomePage() {
           </div>
         </section>
       </div>
-    </div>
-  )
-}
-
-export function ProfilePage() {
-  const user = useAuthStore((s) => s.user)
-  const courses = useLmsStore((s) => s.courses)
-  const reset = useLmsStore((s) => s.reset)
-  const { role } = useRole()
-  const [confirm, setConfirm] = useState(false)
-  const name = user?.fullName ?? 'User'
-  return (
-    <div className="space-y-6 max-w-5xl">
-      <div className="card overflow-hidden">
-        <div className="h-32" style={{ background: 'linear-gradient(120deg,#00267A,#0033A0,#00B3A1)' }} />
-        <div className="px-6 pb-6 -mt-12 flex flex-wrap items-end gap-5">
-          <span className="w-24 h-24 rounded-3xl grid place-items-center text-3xl font-bold text-white border-4" style={{ background: 'linear-gradient(135deg,#00B3A1,#0033A0)', borderColor: 'var(--color-bg-card)' }}>{initials(name)}</span>
-          <div className="flex-1 pb-1"><h1 className="text-2xl font-bold">{name}</h1><div className="text-sm muted">{role}</div></div>
-          <button className="btn btn-secondary" onClick={() => toast('Profile editing is coming soon', 'info')}>Edit profile</button>
-        </div>
-      </div>
-      <div className="grid md:grid-cols-2 gap-6">
-        <section className="card p-6 space-y-4">
-          <h2 className="font-bold">User details</h2>
-          <div className="flex items-center gap-3 text-sm"><Mail size={17} className="muted" /><span>{user?.email}</span></div>
-          <div className="flex items-center gap-3 text-sm"><MapPin size={17} className="muted" /><span>Sri Lanka</span></div>
-          <div className="flex items-center gap-3 text-sm"><Clock size={17} className="muted" /><span>Timezone: Asia/Colombo</span></div>
-        </section>
-        <section className="card p-6">
-          <h2 className="font-bold mb-3">Course details</h2>
-          <div className="flex flex-wrap gap-2">{courses.map((c) => <Link key={c.id} to={`/courses/${c.id}`} className="badge badge-blue">{c.shortName}-{c.fullName}</Link>)}</div>
-        </section>
-        <section className="card p-6 space-y-3">
-          <h2 className="font-bold">Login activity</h2>
-          <div className="text-sm"><span className="muted">First access to site:</span> Monday, 4 March 2024</div>
-          <div className="text-sm"><span className="muted">Last access to site:</span> now</div>
-        </section>
-        <section className="card p-6 space-y-3">
-          <h2 className="font-bold">Demo data</h2>
-          <p className="text-sm muted">Restore all sample courses, submissions and grades to their initial state.</p>
-          <button className="btn btn-secondary" onClick={() => setConfirm(true)}><RotateCcw size={16} /> Reset demo data</button>
-        </section>
-      </div>
-      <Confirm open={confirm} danger title="Reset demo data?" confirmLabel="Reset" message="All changes to submissions, grades, activities and events will be lost." onConfirm={() => { reset(); toast('Demo data restored') }} onClose={() => setConfirm(false)} />
     </div>
   )
 }

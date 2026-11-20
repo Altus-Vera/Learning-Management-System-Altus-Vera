@@ -1,6 +1,9 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, List, AlignJustify, Search, BookOpen, CalendarClock, AlertTriangle, TrendingUp, ClipboardCheck, Clock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, List, AlignJustify, Search, BookOpen, CalendarClock, AlertTriangle, TrendingUp, ClipboardCheck, Clock, ArrowUp, ArrowDown, Eye, EyeOff, RotateCcw, LayoutTemplate, PanelRight, Award } from 'lucide-react'
+import { usePrefsStore, BLOCK_LABELS, BADGES, type BlockId } from '../../../store/prefsStore'
+import { useCalendarEvents, EVENT_COLORS } from '../../calendar/useCalendarEvents'
+import { toast } from '../../../components/Toast'
 import { useLmsStore, courseProgress, assignPhase, CURRENT_STUDENT_ID, STUDENTS, type Course } from '../../../store/lmsStore'
 import { useAuthStore } from '../../../store/authStore'
 import { useRole } from '../../../store/uiStore'
@@ -49,7 +52,9 @@ export default function DashboardPage() {
   const [sort, setSort] = useState<Sort>('name')
   const [view, setView] = useState<View>('card')
   const [search, setSearch] = useState('')
-  const [tlFilter, setTlFilter] = useState<TlFilter>('30')
+  const [tlFilter, setTlFilter] = useState<TlFilter>('7')
+  const [customising, setCustomising] = useState(false)
+  const { blockOrder, hiddenBlocks, hideBlocks, moveBlock, toggleBlockHidden, resetDashboard, set: setPref } = usePrefsStore()
   const [tlSort, setTlSort] = useState<'dates' | 'courses'>('dates')
   const scroller = useRef<HTMLDivElement>(null)
 
@@ -113,8 +118,27 @@ export default function DashboardPage() {
     return [...m.entries()]
   }, [timeline, tlSort])
 
+  const renderBlocks = (map: Record<BlockId, ReactNode>) =>
+    blockOrder.filter((id) => customising || !hiddenBlocks.includes(id)).map((id, i, arr) => (
+      <div key={id} className={`relative ${customising ? 'rounded-2xl outline-2 outline-dashed outline-offset-4 outline-[var(--color-primary)]' : ''} ${hiddenBlocks.includes(id) ? 'opacity-40' : ''}`}>
+        {customising && (
+          <div className="absolute -top-3 right-3 z-10 flex gap-1 p-1 rounded-xl card">
+            <button className="icon-btn !w-7 !h-7" disabled={i === 0} onClick={() => moveBlock(id, -1)} title="Move up"><ArrowUp size={14} /></button>
+            <button className="icon-btn !w-7 !h-7" disabled={i === arr.length - 1} onClick={() => moveBlock(id, 1)} title="Move down"><ArrowDown size={14} /></button>
+            <button className="icon-btn !w-7 !h-7" onClick={() => toggleBlockHidden(id)} title={hiddenBlocks.includes(id) ? `Show ${BLOCK_LABELS[id]} block` : `Hide ${BLOCK_LABELS[id]} block`}>{hiddenBlocks.includes(id) ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+          </div>
+        )}
+        {map[id]}
+      </div>
+    ))
+
   return (
     <div className="space-y-8">
+      <div className="flex flex-wrap justify-end gap-2 -mb-4">
+        {customising && <button className="btn btn-ghost btn-sm" onClick={() => { resetDashboard(); toast('Dashboard reset to default') }}><RotateCcw size={14} /> Reset page to default</button>}
+        <button className={`btn btn-sm ${customising ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCustomising(!customising)}><LayoutTemplate size={14} /> {customising ? 'Stop customising this page' : 'Customise this page'}</button>
+        <button className="btn btn-secondary btn-sm" onClick={() => setPref('hideBlocks', !hideBlocks)}><PanelRight size={14} /> {hideBlocks ? 'Show blocks' : 'Hide blocks'}</button>
+      </div>
       <div className="relative overflow-hidden rounded-3xl p-7 lg:p-9 text-white" style={{ background: 'linear-gradient(120deg,#00267A 0%,#0033A0 55%,#00B3A1 130%)' }}>
         <div className="absolute -right-10 -top-16 w-72 h-72 rounded-full bg-white/10" />
         <div className="absolute right-40 -bottom-24 w-56 h-56 rounded-full bg-white/5" />
@@ -134,7 +158,7 @@ export default function DashboardPage() {
         <Stat icon={TrendingUp} label="Average progress" value={`${avg}%`} tone="#7C3AED" />
       </div>
 
-      <div className="grid xl:grid-cols-[minmax(0,1fr)_360px] gap-8">
+      <div className={`grid gap-8 ${hideBlocks ? '' : 'xl:grid-cols-[minmax(0,1fr)_360px]'}`}>
         <div className="space-y-8 min-w-0">
           <section>
             <div className="flex items-center justify-between mb-4">
@@ -209,8 +233,8 @@ export default function DashboardPage() {
           </section>
         </div>
 
-        <aside className="space-y-6">
-          <section className="card p-5">
+        {!hideBlocks && <aside className="space-y-6">{renderBlocks({
+          timeline: <section className="card p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold flex items-center gap-2"><Clock size={18} style={{ color: 'var(--color-primary)' }} /> Timeline</h2>
             </div>
@@ -244,11 +268,12 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
-          </section>
-
-          <MiniCalendar />
-
-          <section className="card p-5">
+          </section>,
+          calendar: <MiniCalendar />,
+          upcoming: <UpcomingBlock />,
+          badges: <BadgesBlock />,
+          privatefiles: <section className="card p-5"><h2 className="font-bold mb-2">Private files</h2><p className="text-sm muted mb-3">No files available</p><Link to="/files" className="text-sm font-semibold">Manage private files…</Link></section>,
+          onlineusers: <section className="card p-5">
             <h2 className="font-bold mb-1">Online users</h2>
             <div className="text-xs muted mb-3">{STUDENTS.length - 1} online users (last 5 minutes)</div>
             <div className="space-y-2.5">
@@ -262,9 +287,51 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-          </section>
-        </aside>
+          </section>,
+        })}</aside>}
       </div>
     </div>
+  )
+}
+
+function UpcomingBlock() {
+  const events = useCalendarEvents()
+  const { maxUpcoming, lookaheadDays } = usePrefsStore((s) => s.calendar)
+  const now = Date.now()
+  const list = events.filter((e) => { const t = new Date(e.date).getTime(); return t >= now && t <= now + lookaheadDays * 86_400_000 }).slice(0, maxUpcoming)
+  return (
+    <section className="card p-5">
+      <h2 className="font-bold mb-3">Upcoming events</h2>
+      {list.length === 0 ? <p className="text-sm muted">There are no upcoming events</p> : (
+        <div className="space-y-3">
+          {list.map((e) => (
+            <div key={e.key} className="flex gap-3">
+              <span className="w-1 rounded-full shrink-0" style={{ background: EVENT_COLORS[e.type] }} />
+              <div className="min-w-0">
+                {e.link ? <Link to={e.link} className="text-sm font-medium block truncate" style={{ color: 'var(--color-heading)' }}>{e.title}</Link> : <div className="text-sm font-medium truncate" style={{ color: 'var(--color-heading)' }}>{e.title}</div>}
+                <div className="text-xs muted">{fmtDay(e.date)}, {fmtTime(e.date)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-4 mt-4 text-sm font-semibold"><Link to="/calendar?view=upcoming">Go to calendar…</Link><Link to="/calendar" state={{ newEvent: true }}>New event…</Link></div>
+    </section>
+  )
+}
+
+function BadgesBlock() {
+  return (
+    <section className="card p-5">
+      <h2 className="font-bold mb-3">Latest badges</h2>
+      <div className="space-y-2.5">
+        {BADGES.slice(0, 3).map((b) => (
+          <Link key={b.id} to="/badges" className="flex items-center gap-3 !text-inherit">
+            <span className="w-9 h-9 rounded-full grid place-items-center text-white shrink-0" style={{ background: b.color }}><Award size={17} /></span>
+            <span className="min-w-0"><span className="block text-sm font-medium truncate" style={{ color: 'var(--color-heading)' }}>{b.name}</span><span className="block text-xs muted">{b.issued}</span></span>
+          </Link>
+        ))}
+      </div>
+    </section>
   )
 }

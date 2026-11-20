@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Plus, Trash2, CalendarDays, List } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, Plus, Trash2, CalendarDays, List, CalendarRange } from 'lucide-react'
+import { usePrefsStore } from '../../../store/prefsStore'
 import { addDays, addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
 import { useLmsStore, type LmsEvent } from '../../../store/lmsStore'
 import { useRole } from '../../../store/uiStore'
@@ -14,7 +15,13 @@ export default function CalendarPage() {
   const initialDay = params.get('day')
   const [month, setMonth] = useState(initialDay ? new Date(initialDay) : new Date())
   const [selected, setSelected] = useState<Date | null>(initialDay ? new Date(initialDay) : null)
-  const [mode, setMode] = useState<'month' | 'upcoming'>('month')
+  const [mode, setMode] = useState<'month' | 'day' | 'upcoming'>((params.get('view') as 'day' | 'upcoming') ?? (initialDay ? 'day' : 'month'))
+  const location = useLocation()
+  const calPrefs = usePrefsStore((s) => s.calendar)
+  const weekStartsOn = calPrefs.firstDay as 0 | 1 | 2 | 3 | 4 | 5 | 6
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const weekDays = [...DAY_NAMES.slice(weekStartsOn), ...DAY_NAMES.slice(0, weekStartsOn)]
+  const timeFmt = (iso: string) => format(new Date(iso), calPrefs.timeFormat === '24' ? 'HH:mm' : 'h:mm a')
   const [courseFilter, setCourseFilter] = useState<number | 0>(0)
   const [detail, setDetail] = useState<CalItem | null>(null)
   const [creating, setCreating] = useState(false)
@@ -26,8 +33,11 @@ export default function CalendarPage() {
   const all = useCalendarEvents()
   const events = useMemo(() => (courseFilter ? all.filter((e) => e.courseId === courseFilter || e.type === 'site') : all), [all, courseFilter])
 
-  const days = eachDayOfInterval({ start: startOfWeek(startOfMonth(month), { weekStartsOn: 1 }), end: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }) })
-  const upcoming = events.filter((e) => new Date(e.date) >= new Date() && new Date(e.date) <= addDays(new Date(), 60))
+  const days = eachDayOfInterval({ start: startOfWeek(startOfMonth(month), { weekStartsOn }), end: endOfWeek(endOfMonth(month), { weekStartsOn }) })
+  const upcoming = events.filter((e) => new Date(e.date) >= new Date() && new Date(e.date) <= addDays(new Date(), calPrefs.lookaheadDays)).slice(0, Math.max(calPrefs.maxUpcoming, 10))
+  const dayDate = selected ?? new Date()
+  const dayEvents = events.filter((e) => isSameDay(new Date(e.date), dayDate))
+  useEffect(() => { if ((location.state as { newEvent?: boolean } | null)?.newEvent) openNew() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [form, setForm] = useState({ title: '', date: toLocalInput(new Date().toISOString()), type: 'user' as LmsEvent['type'], courseId: 0, description: '' })
   const openNew = (day?: Date) => {
@@ -56,14 +66,35 @@ export default function CalendarPage() {
           {courses.map((c) => <option key={c.id} value={c.id}>{c.shortName}-{c.fullName}</option>)}
         </select>
         <div className="flex p-1 rounded-xl" style={{ background: 'var(--color-bg-subtle)' }}>
-          {([['month', CalendarDays, 'Month'], ['upcoming', List, 'Upcoming events']] as const).map(([m, Icon, l]) => (
+          {([['month', CalendarDays, 'Month'], ['day', CalendarRange, 'Day'], ['upcoming', List, 'Upcoming events']] as const).map(([m, Icon, l]) => (
             <button key={m} onClick={() => setMode(m)} className={`h-8 px-3 rounded-lg flex items-center gap-1.5 text-sm font-medium ${mode === m ? 'bg-[var(--color-bg-card)] shadow-sm text-[var(--color-primary)]' : 'muted'}`}><Icon size={15} />{l}</button>
           ))}
         </div>
         <button className="btn btn-primary" onClick={() => openNew(selected ?? undefined)}><Plus size={17} /> New event</button>
       </div>
 
-      {mode === 'month' ? (
+      {mode === 'day' ? (
+        <div className="card overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
+            <button className="icon-btn !w-9 !h-9" onClick={() => setSelected(addDays(dayDate, -1))} aria-label="Previous day"><ChevronLeft size={18} /></button>
+            <h2 className="text-lg font-bold min-w-[260px] text-center">{format(dayDate, 'EEEE, d MMMM yyyy')}</h2>
+            <button className="icon-btn !w-9 !h-9" onClick={() => setSelected(addDays(dayDate, 1))} aria-label="Next day"><ChevronRight size={18} /></button>
+            <button className="btn btn-secondary btn-sm ml-2" onClick={() => setSelected(new Date())}>Today</button>
+            <button className="btn btn-primary btn-sm ml-auto" onClick={() => openNew(dayDate)}><Plus size={15} /> New event</button>
+          </div>
+          {dayEvents.length === 0 ? <div className="p-12 text-center muted">There are no events on this day</div> : (
+            <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+              {dayEvents.map((e) => (
+                <button key={e.key} onClick={() => setDetail(e)} className="w-full flex items-center gap-4 p-4 text-left hover:bg-[var(--color-bg-card-hover)]" style={{ borderColor: 'var(--color-border)' }}>
+                  <span className="w-20 text-sm font-semibold shrink-0" style={{ color: 'var(--color-heading)' }}>{timeFmt(e.date)}</span>
+                  <span className="w-1 self-stretch rounded-full" style={{ background: EVENT_COLORS[e.type] }} />
+                  <span className="flex-1 min-w-0"><span className="block font-semibold truncate" style={{ color: 'var(--color-heading)' }}>{e.title}</span><span className="block text-sm muted truncate">{EVENT_LABELS[e.type]}{e.courseName ? ` · ${e.courseName}` : ''}</span></span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : mode === 'month' ? (
         <div className="card overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
             <button className="icon-btn !w-9 !h-9" onClick={() => setMonth(addMonths(month, -1))} aria-label="Previous month"><ChevronLeft size={18} /></button>
@@ -75,7 +106,7 @@ export default function CalendarPage() {
             </div>
           </div>
           <div className="grid grid-cols-7 text-xs font-semibold muted border-b" style={{ borderColor: 'var(--color-border)' }}>
-            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d) => <div key={d} className="px-3 py-2.5"><span className="hidden md:inline">{d}</span><span className="md:hidden">{d.slice(0, 3)}</span></div>)}
+            {weekDays.map((d) => <div key={d} className="px-3 py-2.5"><span className="hidden md:inline">{d}</span><span className="md:hidden">{d.slice(0, 3)}</span></div>)}
           </div>
           <div className="grid grid-cols-7">
             {days.map((d) => {

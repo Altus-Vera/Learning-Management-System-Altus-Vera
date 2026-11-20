@@ -6,8 +6,10 @@ import { useRole } from '../../../store/uiStore'
 import { ActivityIcon } from '../../../components/ActivityIcon'
 import { Modal, Confirm } from '../../../components/Modal'
 import { toast } from '../../../components/Toast'
-import { fmtDate, fmtShort, fmtSize, fromLocalInput, timeLeft, toLocalInput } from '../../../lib/format'
+import { fmtDate, fmtShort, fmtSize, fromLocalInput, timeLeft, toLocalInput, initials } from '../../../lib/format'
 import { formatDistanceStrict } from 'date-fns'
+import { ActivityNav } from '../../../components/ActivityNav'
+import { useActivityStore, useMe, type Comment } from '../../../store/activityStore'
 
 const EMPTY: Submission = { studentId: CURRENT_STUDENT_ID, status: 'new', files: [], onlineText: '', modifiedAt: null, grade: null, feedback: '', gradedAt: null }
 
@@ -127,8 +129,9 @@ function StudentView({ a }: { a: Activity }) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [statement, setStatement] = useState(false)
   const phase = assignPhase(s)
-  const canEdit = (phase === 'open' || phase === 'overdue') && sub.status !== 'submitted'
   const graded = sub.grade !== null
+  const accepting = phase === 'open' || phase === 'overdue'
+  const canEdit = accepting && (sub.status !== 'submitted' || (!s.requireSubmitButton && !graded))
 
   if (editing) return <SubmissionEditor a={a} sub={sub} onDone={() => setEditing(false)} />
 
@@ -156,7 +159,12 @@ function StudentView({ a }: { a: Activity }) {
           <button className="btn btn-secondary" onClick={() => setConfirmRemove(true)}><Trash2 size={16} /> Remove submission</button>
           <button className="btn btn-green" onClick={() => { setStatement(false); setConfirmSubmit(true) }}><Send size={16} /> Submit assignment</button>
         </>}
+        {canEdit && sub.status === 'submitted' && <>
+          <button className="btn btn-primary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit submission</button>
+          <button className="btn btn-secondary" onClick={() => setConfirmRemove(true)}><Trash2 size={16} /> Remove submission</button>
+        </>}
       </div>
+      {canEdit && sub.status !== 'new' && <p className="text-sm muted -mt-3">{sub.status === 'draft' ? 'This submission is a draft. Click “Submit assignment” when you are ready for it to be graded.' : 'You can still make changes to your submission.'}</p>}
 
       <section className="card overflow-hidden">
         <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}><h2 className="font-bold">Submission status</h2></div>
@@ -167,7 +175,7 @@ function StudentView({ a }: { a: Activity }) {
         <Row label="Last modified">{sub.modifiedAt ? fmtDate(sub.modifiedAt) : '-'}</Row>
         {s.fileSubmissions && <Row label="File submissions">{sub.files.length ? <div className="grid gap-2 max-w-md">{sub.files.map((f, i) => <FileChip key={i} f={f} />)}</div> : <span className="muted">No files</span>}</Row>}
         {s.onlineText && <Row label="Online text">{sub.onlineText ? <div className="whitespace-pre-wrap">{sub.onlineText}</div> : <span className="muted">-</span>}</Row>}
-        <Row label="Submission comments"><span className="muted">Comments (0)</span></Row>
+        <Row label="Submission comments"><SubmissionComments k={`${a.id}:${CURRENT_STUDENT_ID}`} /></Row>
       </section>
 
       {graded && (
@@ -326,6 +334,7 @@ function GradeDialog({ a, st, sub, onClose }: { a: Activity; st: (typeof STUDENT
         {sub.files.length > 0 && <div className="grid gap-2">{sub.files.map((x, i) => <FileChip key={i} f={x} />)}</div>}
         <div><label className="form-label">Grade out of {s.maxGrade}</label><input className="form-control !w-40" inputMode="decimal" value={g} onChange={(e) => setG(e.target.value)} autoFocus /></div>
         <div><label className="form-label">Feedback comments</label><textarea rows={5} className="form-control" value={f} onChange={(e) => setF(e.target.value)} /></div>
+        <div><div className="form-label">Submission comments</div><SubmissionComments k={`${a.id}:${st.id}`} /></div>
       </div>
     </Modal>
   )
@@ -411,6 +420,35 @@ function SettingsForm({ a }: { a: Activity }) {
   )
 }
 
+const NO_COMMENTS: Comment[] = []
+
+export function SubmissionComments({ k }: { k: string }) {
+  const me = useMe()
+  const comments = useActivityStore((s) => s.comments[k]) ?? NO_COMMENTS
+  const add = useActivityStore((s) => s.addComment)
+  const del = useActivityStore((s) => s.deleteComment)
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  return (
+    <div>
+      <button className="font-semibold text-sm" style={{ color: 'var(--color-link)' }} onClick={() => setOpen(!open)}>{open ? 'Hide comments' : 'Show comments'} · Comments ({comments.length})</button>
+      {open && (
+        <div className="mt-3 space-y-2 max-w-xl">
+          {comments.map((c) => (
+            <div key={c.id} className="flex gap-2.5 p-3 rounded-xl" style={{ background: 'var(--color-bg-subtle)' }}>
+              <span className="w-7 h-7 rounded-full grid place-items-center text-[10px] font-bold shrink-0" style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary)' }}>{initials(c.author)}</span>
+              <div className="flex-1 min-w-0"><div className="text-xs"><b style={{ color: 'var(--color-heading)' }}>{c.author}</b> <span className="muted">· {fmtShort(c.at)}</span></div><div className="text-sm whitespace-pre-wrap">{c.text}</div></div>
+              {(c.authorId === me.id || me.teacher) && <button className="icon-btn !w-7 !h-7" onClick={() => del(k, c.id)} aria-label="Delete comment"><Trash2 size={13} /></button>}
+            </div>
+          ))}
+          <textarea rows={2} className="form-control" placeholder="Add a comment…" value={text} onChange={(e) => setText(e.target.value)} />
+          <div className="flex gap-2"><button className="btn btn-primary btn-sm" disabled={!text.trim()} onClick={() => { add(k, me.id, me.name, text.trim()); setText('') }}>Save comment</button><button className="btn btn-secondary btn-sm" onClick={() => { setText(''); setOpen(false) }}>Cancel</button></div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AssignPage() {
   const { courseId, activityId } = useParams()
   const [params, setParams] = useSearchParams()
@@ -451,6 +489,7 @@ export default function AssignPage() {
       </div>
 
       {!isTeacher ? <StudentView a={a} /> : tab === 'settings' ? <SettingsForm key={a.id} a={a} /> : tab === 'submissions' ? <SubmissionsTable a={a} /> : <GradingSummary a={a} onView={() => setParams({ tab: 'submissions' })} />}
+      <ActivityNav course={course} current={a.id} />
     </div>
   )
 }

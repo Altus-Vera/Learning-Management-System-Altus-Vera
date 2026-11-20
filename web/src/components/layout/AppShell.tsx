@@ -3,10 +3,14 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
+import { MessageDrawer } from '../../features/messages/MessageDrawer'
+import { useUiStore } from '../../store/uiStore'
 
 export function AppShell() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const messages = useUiStore((s) => s.messages)
+  const closeMessages = useUiStore((s) => s.closeMessages)
 
   if (!isAuthenticated()) return <Navigate to="/login" replace />
 
@@ -16,6 +20,7 @@ export function AppShell() {
       {mobileOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMobileOpen(false)} />}
       <div className="flex-1 min-w-0 flex flex-col">
         <Topbar onMobileMenu={() => setMobileOpen(true)} />
+        <MessageDrawer open={messages.open} startWith={messages.startWith} onClose={closeMessages} />
         <main className="flex-1 px-4 lg:px-8 py-6 lg:py-8">
           <div className="mx-auto max-w-[1400px] animate-in">
             <Outlet />

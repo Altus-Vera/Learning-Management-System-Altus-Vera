@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Menu, PanelLeft, Search, Bell, MessageCircle, Moon, Sun, User, GraduationCap, CalendarDays, FolderLock, LogOut, Eye, ChevronDown, ClipboardCheck } from 'lucide-react'
+import { Menu, PanelLeft, Search, Bell, MessageCircle, Moon, Sun, User, GraduationCap, CalendarDays, LogOut, Eye, ChevronDown, CheckCheck, Settings, LayoutDashboard, SlidersHorizontal } from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
 import { useAuthStore } from '../../store/authStore'
 import { useThemeStore } from '../../store/themeStore'
-import { useLmsStore, assignPhase, CURRENT_STUDENT_ID, STUDENTS } from '../../store/lmsStore'
+import { useLmsStore } from '../../store/lmsStore'
+import { useSocialStore } from '../../store/socialStore'
 import { useRole, useUiStore } from '../../store/uiStore'
-import { fmtDay, fmtTime, initials } from '../../lib/format'
+import { initials } from '../../lib/format'
 
 function useOutside(open: boolean, close: () => void) {
   const ref = useRef<HTMLDivElement>(null)
@@ -26,7 +28,6 @@ export function Topbar({ onMobileMenu }: { onMobileMenu: () => void }) {
   const { canTeach, isTeacher } = useRole()
   const setViewAsStudent = useUiStore((s) => s.setViewAsStudent)
   const courses = useLmsStore((s) => s.courses)
-  const submissions = useLmsStore((s) => s.submissions)
   const navigate = useNavigate()
 
   const [menu, setMenu] = useState<null | 'notif' | 'msg' | 'user'>(null)
@@ -38,21 +39,13 @@ export function Topbar({ onMobileMenu }: { onMobileMenu: () => void }) {
 
   const name = user?.fullName ?? 'User'
 
-  const notifications = useMemo(() => {
-    const out: { id: number; courseId: number; title: string; course: string; due: string }[] = []
-    courses.forEach((c) => c.sections.forEach((s) => s.activities.forEach((a) => {
-      if (a.type !== 'assign' || !a.visible || !a.assign?.dueDate) return
-      if (isTeacher) {
-        const pending = STUDENTS.filter((st) => { const sb = submissions[`${a.id}:${st.id}`]; return sb?.status === 'submitted' && sb.grade === null }).length
-        if (pending) out.push({ id: a.id, courseId: c.id, title: `${a.name}: ${pending} submission${pending > 1 ? 's' : ''} need grading`, course: c.shortName, due: a.assign.dueDate })
-        return
-      }
-      const sub = submissions[`${a.id}:${CURRENT_STUDENT_ID}`]
-      const phase = assignPhase(a.assign)
-      if ((phase === 'open' || phase === 'overdue') && sub?.status !== 'submitted') out.push({ id: a.id, courseId: c.id, title: `${a.name} is due`, course: c.shortName, due: a.assign.dueDate })
-    })))
-    return out.sort((x, y) => x.due.localeCompare(y.due)).slice(0, 6)
-  }, [courses, submissions, isTeacher])
+  const notifs = useSocialStore((s) => s.notifications)
+  const markNotificationRead = useSocialStore((s) => s.markNotificationRead)
+  const markAllNotificationsRead = useSocialStore((s) => s.markAllNotificationsRead)
+  const conversations = useSocialStore((s) => s.conversations)
+  const openMessages = useUiStore((s) => s.openMessages)
+  const unreadNotif = notifs.filter((n) => !n.read).length
+  const unreadMsgs = conversations.filter((c) => c.unread > 0 && !c.muted).length
 
   const results = useMemo(() => {
     const t = q.trim().toLowerCase()
@@ -81,6 +74,7 @@ export function Topbar({ onMobileMenu }: { onMobileMenu: () => void }) {
           value={q}
           onChange={(e) => { setQ(e.target.value); setSearchOpen(true) }}
           onFocus={() => setSearchOpen(true)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && q.trim()) { navigate(`/search?q=${encodeURIComponent(q.trim())}`); setQ(''); setSearchOpen(false) } }}
           placeholder="Search courses and activities…"
           className="form-control pl-10 !bg-[var(--color-bg-subtle)] !border-transparent focus:!border-[var(--color-primary)]"
         />
@@ -109,37 +103,36 @@ export function Topbar({ onMobileMenu }: { onMobileMenu: () => void }) {
         <div className="relative">
           <button className="icon-btn relative" onClick={() => setMenu(menu === 'notif' ? null : 'notif')} aria-label="Notifications">
             <Bell size={19} />
-            {notifications.length > 0 && <span className="absolute top-2 right-2 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white grid place-items-center" style={{ background: 'var(--color-red)' }}>{notifications.length}</span>}
+            {unreadNotif > 0 && <span className="absolute top-2 right-2 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white grid place-items-center" style={{ background: 'var(--color-red)' }}>{unreadNotif}</span>}
           </button>
           {menu === 'notif' && (
-            <div className="dropdown-menu right-0 top-12 w-[360px]">
-              <div className="flex items-center justify-between px-4 py-2">
-                <span className="font-semibold" style={{ color: 'var(--color-heading)' }}>Notifications</span>
-                <span className="text-xs muted">{notifications.length} pending</span>
+            <div className="dropdown-menu right-0 top-12 w-[380px] !py-0 overflow-hidden">
+              <div className="flex items-center gap-1 px-4 py-2.5 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                <span className="font-semibold mr-auto" style={{ color: 'var(--color-heading)' }}>Notifications</span>
+                <button className="icon-btn !w-8 !h-8" title="Mark all as read" onClick={markAllNotificationsRead}><CheckCheck size={16} /></button>
+                <Link to="/preferences/notifications" onClick={close} className="icon-btn !w-8 !h-8" title="Notification preferences"><Settings size={16} /></Link>
               </div>
-              {notifications.length === 0 && <div className="px-4 py-6 text-center text-sm muted">You have no notifications</div>}
-              {notifications.map((n) => (
-                <Link key={n.id} to={`/courses/${n.courseId}/assign/${n.id}${isTeacher ? '?tab=submissions' : ''}`} onClick={close} className="dropdown-item !items-start">
-                  <ClipboardCheck size={18} className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }} />
-                  <span className="flex-1">
-                    <span className="block font-medium" style={{ color: 'var(--color-heading)' }}>{n.title}</span>
-                    <span className="block text-xs muted">{n.course} · {fmtDay(n.due)}, {fmtTime(n.due)}</span>
-                  </span>
-                </Link>
-              ))}
+              <div className="max-h-[380px] overflow-y-auto py-1">
+                {notifs.length === 0 && <div className="px-4 py-6 text-center text-sm muted">You have no notifications</div>}
+                {notifs.slice(0, 8).map((n) => (
+                  <Link key={n.id} to={`/notifications?id=${n.id}`} onClick={() => { markNotificationRead(n.id); close() }} className="dropdown-item !items-start">
+                    <span className="w-2 h-2 rounded-full mt-2 shrink-0" style={{ background: n.read ? 'transparent' : 'var(--color-primary)' }} />
+                    <span className="flex-1 min-w-0">
+                      <span className={`block text-sm ${n.read ? '' : 'font-semibold'}`} style={{ color: 'var(--color-heading)' }}>{n.subject}</span>
+                      <span className="block text-xs muted">{formatDistanceToNow(new Date(n.at), { addSuffix: true })}</span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+              <Link to="/notifications" onClick={close} className="block text-center text-sm font-semibold py-2.5 border-t" style={{ borderColor: 'var(--color-border)' }}>See all</Link>
             </div>
           )}
         </div>
 
-        <div className="relative">
-          <button className="icon-btn" onClick={() => setMenu(menu === 'msg' ? null : 'msg')} aria-label="Messages"><MessageCircle size={19} /></button>
-          {menu === 'msg' && (
-            <div className="dropdown-menu right-0 top-12 w-[320px]">
-              <div className="px-4 py-2 font-semibold" style={{ color: 'var(--color-heading)' }}>Messages</div>
-              <div className="px-4 py-6 text-center text-sm muted">No messages yet. Starred, group and private conversations will appear here.</div>
-            </div>
-          )}
-        </div>
+        <button className="icon-btn relative" onClick={() => openMessages()} aria-label="Messages">
+          <MessageCircle size={19} />
+          {unreadMsgs > 0 && <span className="absolute top-2 right-2 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white grid place-items-center" style={{ background: 'var(--color-primary)' }}>{unreadMsgs}</span>}
+        </button>
 
         <div className="relative ml-1">
           <button className="flex items-center gap-2.5 h-10 pl-1 pr-2 rounded-xl hover:bg-[var(--color-bg-subtle)]" onClick={() => setMenu(menu === 'user' ? null : 'user')}>
@@ -152,10 +145,12 @@ export function Topbar({ onMobileMenu }: { onMobileMenu: () => void }) {
           </button>
           {menu === 'user' && (
             <div className="dropdown-menu right-0 top-12 w-[240px]" onClick={close}>
+              <Link to="/dashboard" className="dropdown-item"><LayoutDashboard size={16} /> Dashboard</Link>
               <Link to="/profile" className="dropdown-item"><User size={16} /> Profile</Link>
               <Link to="/grades" className="dropdown-item"><GraduationCap size={16} /> Grades</Link>
+              <button className="dropdown-item w-[calc(100%-12px)]" onClick={() => openMessages()}><MessageCircle size={16} /> Messages</button>
+              <Link to="/preferences" className="dropdown-item"><SlidersHorizontal size={16} /> Preferences</Link>
               <Link to="/calendar" className="dropdown-item"><CalendarDays size={16} /> Calendar</Link>
-              <Link to="/files" className="dropdown-item"><FolderLock size={16} /> Private files</Link>
               {canTeach && (
                 <button className="dropdown-item w-[calc(100%-12px)]" onClick={() => setViewAsStudent(isTeacher)}>
                   <Eye size={16} /> {isTeacher ? 'Switch role to student' : 'Return to my normal role'}

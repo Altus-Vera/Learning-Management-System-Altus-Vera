@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Home, CalendarDays, GraduationCap, BookOpen, Library, ScrollText, MessageSquareWarning, ChevronDown, FolderLock } from 'lucide-react'
+import { LayoutDashboard, Home, CalendarDays, GraduationCap, BookOpen, Library, ScrollText, MessageSquareWarning, ChevronDown, FolderLock, Award } from 'lucide-react'
 import { useState } from 'react'
 import { useLmsStore } from '../../store/lmsStore'
 import { useUiStore } from '../../store/uiStore'
@@ -11,6 +11,7 @@ const MAIN = [
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/grades', label: 'Grades', icon: GraduationCap },
   { to: '/files', label: 'Private files', icon: FolderLock },
+  { to: '/badges', label: 'Badges', icon: Award },
 ]
 
 const RESOURCES = [
