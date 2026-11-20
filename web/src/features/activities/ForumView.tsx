@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Pin, Lock, Star, Bell, BellOff, ChevronLeft, Reply, Pencil, Trash2, MessageSquare, Search, Unlock, PinOff } from 'lucide-react'
+import { Plus, Pin, Lock, Star, Bell, BellOff, ChevronLeft, Reply, Pencil, Trash2, MessageSquare, Search, Unlock, PinOff, BarChart3 } from 'lucide-react'
+import { ForumAnalytics } from './ForumAnalytics'
 import { formatDistanceToNow } from 'date-fns'
 import { useActivityStore, seedDiscussions, useMe, type Discussion, type ForumPost } from '../../store/activityStore'
 import type { Activity } from '../../store/lmsStore'
@@ -22,6 +23,7 @@ export function ForumView({ a }: { a: Activity }) {
   const [pin, setPin] = useState(false)
   const [q, setQ] = useState('')
   const canPost = !news || me.teacher
+  const [view, setView] = useState<'discussions' | 'analytics'>('discussions')
 
   const sorted = useMemo(() => {
     const t = q.trim().toLowerCase()
@@ -34,8 +36,18 @@ export function ForumView({ a }: { a: Activity }) {
   const open = discussions.find((d) => d.id === openId)
   if (open) return <DiscussionView forumId={a.id} news={news} d={open} onBack={() => setOpenId(null)} />
 
+  const tabs = me.teacher && (
+    <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      {([['discussions', 'Discussions', MessageSquare], ['analytics', 'Analytics', BarChart3]] as const).map(([k, l, Icon]) => (
+        <button key={k} className={`tab flex items-center gap-2 ${view === k ? 'tab-active' : ''}`} onClick={() => setView(k)}><Icon size={15} />{l}</button>
+      ))}
+    </div>
+  )
+  if (me.teacher && view === 'analytics') return <div className="space-y-4">{tabs}<ForumAnalytics a={a} onOpenDiscussion={(id) => { setView('discussions'); setOpenId(id) }} /></div>
+
   return (
     <div className="space-y-4">
+      {tabs}
       {a.description && <p className="muted">{a.description}</p>}
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 p-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
