@@ -3,7 +3,7 @@ import { useLmsStore } from '../../store/lmsStore'
 
 export interface CalItem { key: string; id: number; title: string; date: string; type: 'due' | 'user' | 'course' | 'site'; courseId?: number; courseName?: string; link?: string; editable: boolean }
 
-export const EVENT_COLORS: Record<CalItem['type'], string> = { due: '#DC2626', course: '#D97706', user: '#2554C7', site: '#0D9488' }
+export const EVENT_COLORS: Record<CalItem['type'], string> = { due: '#DC2626', course: '#D97706', user: '#0033A0', site: '#0D9488' }
 export const EVENT_LABELS: Record<CalItem['type'], string> = { due: 'Due date', course: 'Course event', user: 'User event', site: 'Site event' }
 
 export function useCalendarEvents() {

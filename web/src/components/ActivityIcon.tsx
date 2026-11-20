@@ -2,7 +2,7 @@ import { FileText, ClipboardCheck, MessagesSquare, ListChecks, Link2, Folder, Vo
 import type { ActivityType } from '../store/lmsStore'
 
 const MAP: Record<ActivityType, { icon: typeof FileText; bg: string; fg: string; label: string }> = {
-  assign:   { icon: ClipboardCheck, bg: '#EAF0FD', fg: '#2554C7', label: 'Assignment' },
+  assign:   { icon: ClipboardCheck, bg: '#E6ECF8', fg: '#0033A0', label: 'Assignment' },
   resource: { icon: FileText,       bg: '#FDECEC', fg: '#DC2626', label: 'File' },
   forum:    { icon: MessagesSquare, bg: '#F3E8FF', fg: '#7C3AED', label: 'Forum' },
   quiz:     { icon: ListChecks,     bg: '#FEF3C7', fg: '#D97706', label: 'Quiz' },

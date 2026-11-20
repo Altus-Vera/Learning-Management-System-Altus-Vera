@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { isAxiosError } from 'axios'
 import { Eye, EyeOff, Loader2, HelpCircle, Mail, Lock, AlertCircle, Moon, Sun, BookOpen, ClipboardCheck, CalendarDays, GraduationCap, CheckCircle2 } from 'lucide-react'
@@ -6,6 +6,7 @@ import { useLogin } from '../hooks/useLogin'
 import { useAuthStore } from '../../../store/authStore'
 import { useThemeStore } from '../../../store/themeStore'
 import { Modal } from '../../../components/Modal'
+import { BrandLogo } from '../../../components/BrandLogo'
 
 const REMEMBER_KEY = 'lms-remember-username'
 
@@ -15,18 +16,6 @@ const FEATURES = [
   { icon: CalendarDays, text: 'Never miss a deadline with the timeline' },
   { icon: GraduationCap, text: 'View grades and lecturer feedback' },
 ]
-
-function Logo({ size = 40 }: { size?: number }) {
-  const id = useId()
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" className="shrink-0">
-      <defs><linearGradient id={id} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#00B3A1" /><stop offset="1" stopColor="#2554C7" /></linearGradient></defs>
-      <rect width="40" height="40" rx="11" fill={`url(#${id})`} />
-      <path d="M20 9 L31 30 H9 Z" fill="#fff" opacity=".95" />
-      <path d="M20 19 L25.5 30 H14.5 Z" fill="#2554C7" opacity=".55" />
-    </svg>
-  )
-}
 
 export default function LoginPage() {
   const remembered = localStorage.getItem(REMEMBER_KEY) ?? ''
@@ -61,7 +50,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--color-bg-page)' }}>
       <aside className="hidden lg:flex relative w-[46%] max-w-[680px] flex-col justify-between p-12 text-white overflow-hidden"
-        style={{ background: 'linear-gradient(140deg,#14306F 0%,#2554C7 55%,#00B3A1 120%)' }}>
+        style={{ background: 'linear-gradient(140deg,#001C5C 0%,#0033A0 55%,#00B3A1 120%)' }}>
         <div className="absolute -right-24 -top-24 w-96 h-96 rounded-full bg-white/10" />
         <div className="absolute -left-20 bottom-10 w-72 h-72 rounded-full bg-white/5" />
         <svg className="absolute inset-0 w-full h-full opacity-[.12]" preserveAspectRatio="none">
@@ -69,9 +58,8 @@ export default function LoginPage() {
           <rect width="100%" height="100%" fill="url(#lp)" />
         </svg>
 
-        <div className="relative flex items-center gap-3">
-          <Logo size={44} />
-          <div className="leading-tight"><div className="font-extrabold text-lg">Altus Vera</div><div className="text-xs text-white/70 font-medium">Learning Platform</div></div>
+        <div className="relative">
+          <BrandLogo variant="full" white height={128} />
         </div>
 
         <div className="relative">
@@ -92,7 +80,7 @@ export default function LoginPage() {
 
       <main className="flex-1 flex flex-col">
         <div className="flex items-center justify-between p-5 lg:justify-end">
-          <div className="flex items-center gap-2.5 lg:hidden"><Logo size={36} /><span className="font-extrabold" style={{ color: 'var(--color-heading)' }}>Altus Vera LMS</span></div>
+          <div className="flex items-center gap-2.5 lg:hidden"><BrandLogo height={36} /><span className="font-extrabold tracking-[0.06em]" style={{ color: 'var(--color-primary)' }}>ALTUS VERA</span></div>
           <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme">{theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}</button>
         </div>
 

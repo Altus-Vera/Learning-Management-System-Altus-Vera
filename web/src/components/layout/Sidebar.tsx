@@ -3,6 +3,7 @@ import { LayoutDashboard, Home, CalendarDays, GraduationCap, BookOpen, Library, 
 import { useState } from 'react'
 import { useLmsStore } from '../../store/lmsStore'
 import { useUiStore } from '../../store/uiStore'
+import { BrandLogo } from '../BrandLogo'
 
 const MAIN = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -39,16 +40,11 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
       style={{ background: 'var(--color-bg-sidebar)', borderColor: 'var(--color-border)' }}
     >
       <div className="flex items-center gap-3 h-16 px-5 shrink-0">
-        <svg width="34" height="34" viewBox="0 0 40 40" className="shrink-0">
-          <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#00B3A1" /><stop offset="1" stopColor="#2554C7" /></linearGradient></defs>
-          <rect width="40" height="40" rx="11" fill="url(#lg)" />
-          <path d="M20 9 L31 30 H9 Z" fill="#fff" opacity=".95" />
-          <path d="M20 19 L25.5 30 H14.5 Z" fill="#2554C7" opacity=".55" />
-        </svg>
+        <BrandLogo height={34} />
         {wide && (
           <div className="leading-tight">
-            <div className="font-extrabold text-[15px] tracking-tight" style={{ color: 'var(--color-heading)' }}>Altus Vera</div>
-            <div className="text-[11px] font-medium muted">Learning Platform</div>
+            <div className="font-extrabold text-[15px] tracking-[0.06em]" style={{ color: 'var(--color-primary)' }}>ALTUS VERA</div>
+            <div className="text-[8.5px] font-semibold tracking-[0.1em] whitespace-nowrap muted">LEARN · INNOVATE · TRANSFORM</div>
           </div>
         )}
       </div>

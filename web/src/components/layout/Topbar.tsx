@@ -143,7 +143,7 @@ export function Topbar({ onMobileMenu }: { onMobileMenu: () => void }) {
 
         <div className="relative ml-1">
           <button className="flex items-center gap-2.5 h-10 pl-1 pr-2 rounded-xl hover:bg-[var(--color-bg-subtle)]" onClick={() => setMenu(menu === 'user' ? null : 'user')}>
-            <span className="w-8 h-8 rounded-full grid place-items-center text-xs font-bold text-white" style={{ background: 'linear-gradient(135deg,#00B3A1,#2554C7)' }}>{initials(name)}</span>
+            <span className="w-8 h-8 rounded-full grid place-items-center text-xs font-bold text-white" style={{ background: 'linear-gradient(135deg,#00B3A1,#0033A0)' }}>{initials(name)}</span>
             <span className="hidden md:block text-left leading-tight">
               <span className="block text-sm font-semibold" style={{ color: 'var(--color-heading)' }}>{name}</span>
               <span className="block text-[11px] muted">{user?.role}</span>

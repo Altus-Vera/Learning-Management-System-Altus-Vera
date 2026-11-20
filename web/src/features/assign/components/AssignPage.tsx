@@ -210,7 +210,7 @@ function GradingSummary({ a, onView }: { a: Activity; onView: () => void }) {
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: Users, label: 'Participants', value: STUDENTS.length, tone: '#2554C7' },
+          { icon: Users, label: 'Participants', value: STUDENTS.length, tone: '#0033A0' },
           { icon: ClipboardCheck, label: 'Submitted', value: submitted, tone: '#16A34A' },
           { icon: Pencil, label: 'Drafts', value: drafts, tone: '#D97706' },
           { icon: AlertTriangle, label: 'Needs grading', value: needs, tone: '#DC2626' },

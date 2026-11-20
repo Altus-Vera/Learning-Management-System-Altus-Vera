@@ -34,7 +34,7 @@ export function SiteHomePage() {
   ]
   return (
     <div className="space-y-8">
-      <div className="rounded-3xl p-8 text-white" style={{ background: 'linear-gradient(120deg,#1A3C8F,#00B3A1)' }}>
+      <div className="rounded-3xl p-8 text-white" style={{ background: 'linear-gradient(120deg,#00267A,#00B3A1)' }}>
         <h1 className="!text-white text-3xl font-bold">Welcome to Altus Vera LMS</h1>
         <p className="text-white/80 mt-2 max-w-2xl">Your learning platform for lecture materials, assignments, quizzes and grades.</p>
       </div>
@@ -68,9 +68,9 @@ export function ProfilePage() {
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="card overflow-hidden">
-        <div className="h-32" style={{ background: 'linear-gradient(120deg,#1A3C8F,#2554C7,#00B3A1)' }} />
+        <div className="h-32" style={{ background: 'linear-gradient(120deg,#00267A,#0033A0,#00B3A1)' }} />
         <div className="px-6 pb-6 -mt-12 flex flex-wrap items-end gap-5">
-          <span className="w-24 h-24 rounded-3xl grid place-items-center text-3xl font-bold text-white border-4" style={{ background: 'linear-gradient(135deg,#00B3A1,#2554C7)', borderColor: 'var(--color-bg-card)' }}>{initials(name)}</span>
+          <span className="w-24 h-24 rounded-3xl grid place-items-center text-3xl font-bold text-white border-4" style={{ background: 'linear-gradient(135deg,#00B3A1,#0033A0)', borderColor: 'var(--color-bg-card)' }}>{initials(name)}</span>
           <div className="flex-1 pb-1"><h1 className="text-2xl font-bold">{name}</h1><div className="text-sm muted">{role}</div></div>
           <button className="btn btn-secondary" onClick={() => toast('Profile editing is coming soon', 'info')}>Edit profile</button>
         </div>

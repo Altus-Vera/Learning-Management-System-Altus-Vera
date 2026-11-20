@@ -127,7 +127,7 @@ const buildSections = (code: string): Section[] => [
 ]
 
 const COURSES: Omit<Course, 'sections'>[] = [
-  { id: 13195, shortName: 'BS401.3', fullName: 'Business Policy and Strategy', category: 'Faculty of Business', term: 'Year 4 — Semester 1', color: '#2554C7', lecturer: 'Dr. K. Perera', starred: true, hidden: false, lastAccess: d(0, 9, 0) },
+  { id: 13195, shortName: 'BS401.3', fullName: 'Business Policy and Strategy', category: 'Faculty of Business', term: 'Year 4 — Semester 1', color: '#0033A0', lecturer: 'Dr. K. Perera', starred: true, hidden: false, lastAccess: d(0, 9, 0) },
   { id: 13210, shortName: 'CS404.3', fullName: 'Parallel and Distributed Computing', category: 'Faculty of Computing', term: 'Year 4 — Semester 2', color: '#0D9488', lecturer: 'Mr. S. Fernando', starred: false, hidden: false, lastAccess: d(-1, 15, 0) },
   { id: 13188, shortName: 'PR400', fullName: 'Special Award Project', category: 'Faculty of Computing', term: 'Year 4 — Semester 1', color: '#7C3AED', lecturer: 'Prof. N. Silva', starred: false, hidden: false, lastAccess: d(-2, 11, 0) },
   { id: 13201, shortName: 'SE402.3', fullName: 'Software Quality Assurance', category: 'Faculty of Computing', term: 'Year 4 — Semester 1', color: '#DB2777', lecturer: 'Ms. A. Jayasinghe', starred: false, hidden: false, lastAccess: d(-4, 10, 0) },

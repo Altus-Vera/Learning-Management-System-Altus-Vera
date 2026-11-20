@@ -115,7 +115,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className="relative overflow-hidden rounded-3xl p-7 lg:p-9 text-white" style={{ background: 'linear-gradient(120deg,#1A3C8F 0%,#2554C7 55%,#00B3A1 130%)' }}>
+      <div className="relative overflow-hidden rounded-3xl p-7 lg:p-9 text-white" style={{ background: 'linear-gradient(120deg,#00267A 0%,#0033A0 55%,#00B3A1 130%)' }}>
         <div className="absolute -right-10 -top-16 w-72 h-72 rounded-full bg-white/10" />
         <div className="absolute right-40 -bottom-24 w-56 h-56 rounded-full bg-white/5" />
         <div className="relative">
@@ -128,7 +128,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <Stat icon={BookOpen} label="Courses in progress" value={active.length} tone="#2554C7" />
+        <Stat icon={BookOpen} label="Courses in progress" value={active.length} tone="#0033A0" />
         <Stat icon={isTeacher ? ClipboardCheck : CalendarClock} label={isTeacher ? 'To grade' : 'Due in 7 days'} value={isTeacher ? timeline.length : dueWeek} tone="#0D9488" />
         <Stat icon={AlertTriangle} label="Overdue" value={overdue} tone="#DC2626" />
         <Stat icon={TrendingUp} label="Average progress" value={`${avg}%`} tone="#7C3AED" />
