@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Mail, MapPin, Clock, Building2, Globe, Pencil, MessageCircle, UserPlus, UserMinus, Ban, RotateCcw, Award, Search, BookOpen, Shield, FileText, BarChart3, LogIn } from 'lucide-react'
 import { useLmsStore } from '../../store/lmsStore'
 import { useAuthStore } from '../../store/authStore'
-import { useRole, useUiStore } from '../../store/uiStore'
+import { useRole, useUiStore, roleLabel } from '../../store/uiStore'
 import { usePrefsStore, BADGES } from '../../store/prefsStore'
 import { useSocialStore, PEOPLE } from '../../store/socialStore'
 import { Confirm } from '../../components/Modal'
@@ -38,7 +38,7 @@ export function ProfilePage() {
         <div className="h-32" style={{ background: 'linear-gradient(120deg,#00267A,#0033A0,#00B3A1)' }} />
         <div className="px-6 pb-6 -mt-12 flex flex-wrap items-end gap-5">
           <span className="w-24 h-24 rounded-3xl grid place-items-center text-3xl font-bold text-white border-4" style={{ background: 'linear-gradient(135deg,#00B3A1,#0033A0)', borderColor: 'var(--color-bg-card)' }}>{initials(name)}</span>
-          <div className="flex-1 pb-1 min-w-[200px]"><h1 className="text-2xl font-bold">{name}</h1><div className="text-sm muted">{isMe ? role : other!.role}{isMe && profile.department ? ` · ${profile.department}` : ''}</div></div>
+          <div className="flex-1 pb-1 min-w-[200px]"><h1 className="text-2xl font-bold">{name}</h1><div className="text-sm muted">{isMe ? roleLabel(role) : other!.role}{isMe && profile.department ? ` · ${profile.department}` : ''}</div></div>
           {isMe ? (
             <Link to="/preferences/profile" className="btn btn-secondary !text-[var(--color-heading)]"><Pencil size={15} /> Edit profile</Link>
           ) : (

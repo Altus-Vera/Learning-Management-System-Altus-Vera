@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, List, AlignJustify, Search, BookOpen, CalendarClock, AlertTriangle, TrendingUp, ClipboardCheck, Clock, ArrowUp, ArrowDown, Eye, EyeOff, RotateCcw, LayoutTemplate, PanelRight, Award } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, List, AlignJustify, Search, BookOpen, CalendarClock, AlertTriangle, TrendingUp, ClipboardCheck, Clock, ArrowUp, ArrowDown, Eye, EyeOff, RotateCcw, LayoutTemplate, PanelRight, Award, Ban } from 'lucide-react'
 import { usePrefsStore, BLOCK_LABELS, BADGES, type BlockId } from '../../../store/prefsStore'
 import { useCalendarEvents, EVENT_COLORS } from '../../calendar/useCalendarEvents'
 import { toast } from '../../../components/Toast'
+import { useMyCourses, useMyBlocks, useAdminStore } from '../../../store/adminStore'
 import { useLmsStore, courseProgress, assignPhase, CURRENT_STUDENT_ID, STUDENTS, type Course } from '../../../store/lmsStore'
 import { useAuthStore } from '../../../store/authStore'
 import { useRole } from '../../../store/uiStore'
@@ -44,7 +45,10 @@ function Select<T extends string>({ value, onChange, options, className = '!w-au
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user)
   const { isTeacher } = useRole()
-  const courses = useLmsStore((s) => s.courses)
+  const courses = useMyCourses()
+  const myBlocks = useMyBlocks()
+  const courseBlocks = useAdminStore((s) => s.courseBlocks)
+  const accountBlocked = useAdminStore((s) => !!s.accountBlocks[CURRENT_STUDENT_ID])
   const completion = useLmsStore((s) => s.completion)
   const submissions = useLmsStore((s) => s.submissions)
 
@@ -80,6 +84,7 @@ export default function DashboardPage() {
     const items: { id: number; course: Course; name: string; due: string; overdue: boolean; action: string }[] = []
     courses.forEach((c) => {
       if (c.hidden || isPast(c)) return
+      if (!isTeacher && (accountBlocked || courseBlocks[`${c.id}:${CURRENT_STUDENT_ID}`])) return
       c.sections.forEach((s) => s.activities.forEach((a) => {
         if (a.type !== 'assign' || !a.visible || !a.assign?.dueDate) return
         const phase = assignPhase(a.assign, now)
@@ -100,7 +105,7 @@ export default function DashboardPage() {
       return i.overdue || new Date(i.due).getTime() - now.getTime() <= Number(tlFilter) * 86_400_000
     })
     return filtered.sort((a, b) => (tlSort === 'dates' ? a.due.localeCompare(b.due) : a.course.fullName.localeCompare(b.course.fullName) || a.due.localeCompare(b.due)))
-  }, [courses, submissions, tlFilter, tlSort, isTeacher])
+  }, [courses, submissions, tlFilter, tlSort, isTeacher, courseBlocks, accountBlocked])
 
   const active = courses.filter((c) => !c.hidden && !isPast(c))
   const avg = active.length ? Math.round(active.reduce((n, c) => n + courseProgress(c, completion), 0) / active.length) : 0
@@ -139,6 +144,12 @@ export default function DashboardPage() {
         <button className={`btn btn-sm ${customising ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCustomising(!customising)}><LayoutTemplate size={14} /> {customising ? 'Stop customising this page' : 'Customise this page'}</button>
         <button className="btn btn-secondary btn-sm" onClick={() => setPref('hideBlocks', !hideBlocks)}><PanelRight size={14} /> {hideBlocks ? 'Show blocks' : 'Hide blocks'}</button>
       </div>
+      {!isTeacher && myBlocks.length > 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-2xl" style={{ background: 'var(--color-red-soft)', color: 'var(--color-red)' }}>
+          <Ban size={20} className="shrink-0 mt-0.5" />
+          <div className="text-sm"><div className="font-bold">Your access has been restricted by the Assistant Registrar</div>{myBlocks.map((b) => <div key={b.label}>{b.label}: {b.reason}</div>)}<div className="mt-1">Please contact the registrar's office to resolve this.</div></div>
+        </div>
+      )}
       <div className="relative overflow-hidden rounded-3xl p-7 lg:p-9 text-white" style={{ background: 'linear-gradient(120deg,#00267A 0%,#0033A0 55%,#00B3A1 130%)' }}>
         <div className="absolute -right-10 -top-16 w-72 h-72 rounded-full bg-white/10" />
         <div className="absolute right-40 -bottom-24 w-56 h-56 rounded-full bg-white/5" />

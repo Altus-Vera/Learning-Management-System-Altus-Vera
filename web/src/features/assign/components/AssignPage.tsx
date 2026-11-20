@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import { CalendarClock, CalendarCheck, CalendarX, UploadCloud, FileText, X, Lock, Unlock, Download, Save, Send, Pencil, Trash2, Eye, EyeOff, Users, ClipboardCheck, Clock, AlertTriangle, Info } from 'lucide-react'
-import { useLmsStore, findActivity, assignPhase, CURRENT_STUDENT_ID, STUDENTS, type Activity, type AssignSettings, type Submission, type SubmissionFile } from '../../../store/lmsStore'
+import { useLmsStore, findActivity, assignPhase, CURRENT_STUDENT_ID, type Student, type Activity, type AssignSettings, type Submission, type SubmissionFile } from '../../../store/lmsStore'
 import { useRole } from '../../../store/uiStore'
 import { ActivityIcon } from '../../../components/ActivityIcon'
 import { Modal, Confirm } from '../../../components/Modal'
@@ -10,6 +10,7 @@ import { fmtDate, fmtShort, fmtSize, fromLocalInput, timeLeft, toLocalInput, ini
 import { formatDistanceStrict } from 'date-fns'
 import { ActivityNav } from '../../../components/ActivityNav'
 import { useActivityStore, useMe, type Comment } from '../../../store/activityStore'
+import { useAdminStore, useEnrolled, useCourseIdOfActivity, useExtension, useBlockState, logAudit, nameOf } from '../../../store/adminStore'
 
 const EMPTY: Submission = { studentId: CURRENT_STUDENT_ID, status: 'new', files: [], onlineText: '', modifiedAt: null, grade: null, feedback: '', gradedAt: null }
 
@@ -128,10 +129,13 @@ function StudentView({ a }: { a: Activity }) {
   const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [statement, setStatement] = useState(false)
-  const phase = assignPhase(s)
+  const ext = useExtension(a.id)
+  const block = useBlockState(useCourseIdOfActivity(a.id))
+  const basePhase = assignPhase(s)
+  const phase = ext && s.acceptingSubmissions && new Date() <= new Date(ext) ? ('open' as const) : basePhase
   const graded = sub.grade !== null
   const accepting = phase === 'open' || phase === 'overdue'
-  const canEdit = accepting && (sub.status !== 'submitted' || (!s.requireSubmitButton && !graded))
+  const canEdit = !block.blocked && accepting && (sub.status !== 'submitted' || (!s.requireSubmitButton && !graded))
 
   if (editing) return <SubmissionEditor a={a} sub={sub} onDone={() => setEditing(false)} />
 
@@ -147,6 +151,8 @@ function StudentView({ a }: { a: Activity }) {
 
   return (
     <div className="space-y-6">
+      {block.blocked && <Notice tone="red" icon={Lock}>Your access to submissions has been restricted by the Assistant Registrar: {block.reason}. Please contact the registrar's office to resolve this.</Notice>}
+      {ext && <Notice tone="green" icon={CalendarCheck}>You have been granted an extension until {fmtDate(ext)}.</Notice>}
       {phase === 'not-open' && <Notice tone="amber" icon={Lock}>This assignment will accept submissions from {fmtDate(s.allowSubmissionsFrom)}.</Notice>}
       {phase === 'closed' && sub.status !== 'submitted' && <Notice tone="red" icon={Lock}>This assignment is not accepting submissions. The cut-off date was {fmtDate(s.cutOffDate)}.</Notice>}
       {phase === 'disabled' && sub.status !== 'submitted' && <Notice tone="red" icon={Lock}>Submissions for this assignment have been disabled by the lecturer.</Notice>}
@@ -208,6 +214,7 @@ function Notice({ tone, icon: Icon, children }: { tone: 'red' | 'amber' | 'green
 }
 
 function GradingSummary({ a, onView }: { a: Activity; onView: () => void }) {
+  const STUDENTS = useEnrolled(useCourseIdOfActivity(a.id))
   const s = a.assign!
   const subs = useLmsStore((st) => st.submissions)
   const submitted = STUDENTS.filter((x) => subs[`${a.id}:${x.id}`]?.status === 'submitted').length
@@ -243,6 +250,8 @@ function GradingSummary({ a, onView }: { a: Activity; onView: () => void }) {
 }
 
 function SubmissionsTable({ a }: { a: Activity }) {
+  const STUDENTS = useEnrolled(useCourseIdOfActivity(a.id))
+  const overrides = useAdminStore((x) => x.overrides)
   const s = a.assign!
   const subs = useLmsStore((st) => st.submissions)
   const grade = useLmsStore((st) => st.gradeSubmission)
@@ -255,14 +264,14 @@ function SubmissionsTable({ a }: { a: Activity }) {
     if (filter === 'submitted') return sub.status === 'submitted'
     if (filter === 'grading') return sub.status === 'submitted' && sub.grade === null
     return true
-  }), [subs, a.id, filter])
+  }), [subs, a.id, filter, STUDENTS])
 
   const saveAll = () => {
     let n = 0
     for (const [sid, v] of Object.entries(quick)) {
       const g = v.g.trim() === '' ? null : Number(v.g)
       if (g !== null && (isNaN(g) || g < 0 || g > s.maxGrade)) return toast(`Grade must be between 0 and ${s.maxGrade}`, 'error')
-      grade(a.id, sid, g, v.f); n++
+      grade(a.id, sid, g, v.f); logAudit('grade', nameOf(sid), `${a.name}: quick grade ${g ?? '-'}`); n++
     }
     setQuick({})
     toast(n ? `${n} grade(s) updated` : 'No changes to save', n ? 'success' : 'info')
@@ -297,6 +306,7 @@ function SubmissionsTable({ a }: { a: Activity }) {
                     <span className={`badge ${sub.status === 'submitted' ? 'badge-green' : sub.status === 'draft' ? 'badge-amber' : 'badge-gray'}`}>{sub.status === 'submitted' ? 'Submitted for grading' : sub.status === 'draft' ? 'Draft' : 'No submission'}</span>
                     {late && <div><span className="badge badge-red">Late</span></div>}
                     {sub.grade !== null && <div><span className="badge badge-blue">Graded</span></div>}
+                    {overrides[`${a.id}:${st.id}`] && <div><span className="badge badge-amber" title={`Previous grade: ${overrides[`${a.id}:${st.id}`].previous}`}>Overridden by Assistant Registrar</span></div>}
                   </td>
                   <td className="px-4 py-3"><input className="form-control !h-9 !w-20" inputMode="decimal" value={v.g} onChange={(e) => setQuick({ ...quick, [st.id]: { ...v, g: e.target.value } })} placeholder="-" /></td>
                   <td className="px-4 py-3 muted whitespace-nowrap">{fmtShort(sub.modifiedAt)}</td>
@@ -315,7 +325,7 @@ function SubmissionsTable({ a }: { a: Activity }) {
   )
 }
 
-function GradeDialog({ a, st, sub, onClose }: { a: Activity; st: (typeof STUDENTS)[number]; sub: Submission; onClose: () => void }) {
+function GradeDialog({ a, st, sub, onClose }: { a: Activity; st: Student; sub: Submission; onClose: () => void }) {
   const s = a.assign!
   const grade = useLmsStore((x) => x.gradeSubmission)
   const save = useLmsStore((x) => x.saveSubmission)
@@ -324,7 +334,7 @@ function GradeDialog({ a, st, sub, onClose }: { a: Activity; st: (typeof STUDENT
   const commit = () => {
     const n = g.trim() === '' ? null : Number(g)
     if (n !== null && (isNaN(n) || n < 0 || n > s.maxGrade)) return toast(`Grade must be between 0 and ${s.maxGrade}`, 'error')
-    grade(a.id, st.id, n, f); toast(`Grade saved for ${st.name}`); onClose()
+    grade(a.id, st.id, n, f); logAudit('grade', st.name, `${a.name}: graded ${n ?? '-'}/${s.maxGrade}`); toast(`Grade saved for ${st.name}`); onClose()
   }
   return (
     <Modal open title={`Grade · ${st.name}`} onClose={onClose} width={640}
@@ -354,7 +364,7 @@ function SettingsForm({ a }: { a: Activity }) {
     if (out.cutOffDate && out.dueDate && out.cutOffDate < out.dueDate) return setErr('Cut-off date cannot be earlier than the due date.')
     if (out.remindToGradeBy && out.dueDate && out.remindToGradeBy < out.dueDate) return setErr('Remind me to grade by date cannot be earlier than the due date.')
     if (!out.fileSubmissions && !out.onlineText) return setErr('At least one submission type must be enabled.')
-    setErr(''); update(a.id, out); toast('Changes saved')
+    setErr(''); update(a.id, out); logAudit('settings', a.name, `Assignment settings updated (due ${out.dueDate ? new Date(out.dueDate).toLocaleString() : 'none'})`); toast('Changes saved')
   }
 
   const dateField = ({ k, flag, label, help }: { k: 'allowSubmissionsFrom' | 'dueDate' | 'cutOffDate' | 'remindToGradeBy'; flag: keyof typeof enabled; label: string; help: string }) => (
@@ -373,12 +383,12 @@ function SettingsForm({ a }: { a: Activity }) {
         <div className="flex flex-wrap items-center gap-4">
           <span className="w-12 h-12 rounded-2xl grid place-items-center" style={{ background: v.acceptingSubmissions ? 'var(--color-green-soft)' : 'var(--color-red-soft)', color: v.acceptingSubmissions ? 'var(--color-green)' : 'var(--color-red)' }}>{v.acceptingSubmissions ? <Unlock size={22} /> : <Lock size={22} />}</span>
           <div className="flex-1 min-w-[220px]"><div className="font-bold" style={{ color: 'var(--color-heading)' }}>Accept submissions</div><div className="text-sm muted">{v.acceptingSubmissions ? 'Students can add and submit work within the availability dates.' : 'Submissions are disabled. Students cannot add or change submissions.'}</div></div>
-          <button className="switch" data-on={v.acceptingSubmissions} onClick={() => { const n = !v.acceptingSubmissions; set('acceptingSubmissions', n); update(a.id, { acceptingSubmissions: n }); toast(n ? 'Submissions enabled' : 'Submissions disabled') }} aria-label="Toggle accepting submissions" />
+          <button className="switch" data-on={v.acceptingSubmissions} onClick={() => { const n = !v.acceptingSubmissions; set('acceptingSubmissions', n); update(a.id, { acceptingSubmissions: n }); logAudit('settings', a.name, n ? 'Submissions enabled' : 'Submissions disabled'); toast(n ? 'Submissions enabled' : 'Submissions disabled') }} aria-label="Toggle accepting submissions" />
         </div>
         <div className="flex flex-wrap items-center gap-4 mt-5 pt-5 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <span className="w-12 h-12 rounded-2xl grid place-items-center" style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary)' }}>{a.visible ? <Eye size={22} /> : <EyeOff size={22} />}</span>
           <div className="flex-1 min-w-[220px]"><div className="font-bold" style={{ color: 'var(--color-heading)' }}>Visible to students</div><div className="text-sm muted">{a.visible ? 'Shown on the course page.' : 'Hidden from students.'}</div></div>
-          <button className="switch" data-on={a.visible} onClick={() => { setVisible(a.id, !a.visible); toast(a.visible ? 'Assignment hidden' : 'Assignment visible') }} aria-label="Toggle visibility" />
+          <button className="switch" data-on={a.visible} onClick={() => { setVisible(a.id, !a.visible); logAudit('visibility', a.name, a.visible ? 'Hidden from students' : 'Shown to students'); toast(a.visible ? 'Assignment hidden' : 'Assignment visible') }} aria-label="Toggle visibility" />
         </div>
       </section>
 

@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { Folder, Download } from 'lucide-react'
-import { useLmsStore, CURRENT_STUDENT_ID, STUDENTS, type Course } from '../../../store/lmsStore'
+import { useLmsStore, CURRENT_STUDENT_ID, type Course } from '../../../store/lmsStore'
 import { useRole } from '../../../store/uiStore'
+import { useEnrolled, useMyCourses } from '../../../store/adminStore'
 import { ActivityIcon } from '../../../components/ActivityIcon'
 import { toast } from '../../../components/Toast'
 
@@ -64,6 +65,7 @@ function UserReport({ course }: { course: Course }) {
 }
 
 function GraderReport({ course }: { course: Course }) {
+  const STUDENTS = useEnrolled(course.id)
   const subs = useLmsStore((s) => s.submissions)
   const items = assigns(course)
   return (
@@ -116,7 +118,7 @@ function OverviewRow({ c }: { c: Course }) {
 }
 
 export function GradesPage() {
-  const courses = useLmsStore((s) => s.courses)
+  const courses = useMyCourses()
   return (
     <div className="space-y-6">
       <div><h1 className="text-2xl font-bold">Grades overview</h1><p className="text-sm muted">Courses I am taking</p></div>

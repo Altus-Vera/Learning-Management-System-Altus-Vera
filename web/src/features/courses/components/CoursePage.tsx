@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import { ChevronDown, Eye, EyeOff, Pencil, Trash2, Plus, Check, Circle, ChevronsDownUp, ChevronsUpDown, Users, BookOpen, GraduationCap, Search, Star, Settings2, ClipboardCheck, ListChecks, MessagesSquare, Vote, FileText, Award } from 'lucide-react'
-import { useLmsStore, courseProgress, assignPhase, CURRENT_STUDENT_ID, STUDENTS, type Activity, type ActivityType, type Course, type Section } from '../../../store/lmsStore'
+import { useLmsStore, courseProgress, assignPhase, CURRENT_STUDENT_ID, type Activity, type ActivityType, type Course, type Section } from '../../../store/lmsStore'
 import { useRole } from '../../../store/uiStore'
 import { ActivityIcon, activityLabel } from '../../../components/ActivityIcon'
 import { Modal, Confirm } from '../../../components/Modal'
@@ -12,8 +12,22 @@ import { CourseGrades } from '../../grades/components/GradesPage'
 import { useActivityStore, seedGroups } from '../../../store/activityStore'
 import { useAuthStore } from '../../../store/authStore'
 import { ActivityIndex } from './ActivityIndex'
+import { useAdminStore, useEnrolled, useCourseIdOfActivity, useBlockState, enrolledIds } from '../../../store/adminStore'
+import { Ban } from 'lucide-react'
+
+function RestrictedCourse({ reason }: { reason: string }) {
+  return (
+    <div className="card p-12 text-center max-w-2xl mx-auto">
+      <span className="w-16 h-16 mx-auto rounded-2xl grid place-items-center" style={{ background: 'var(--color-red-soft)', color: 'var(--color-red)' }}><Ban size={30} /></span>
+      <h2 className="text-xl font-bold mt-4">Access to this course is restricted</h2>
+      <p className="mt-2">{reason}</p>
+      <p className="text-sm muted mt-3">Please contact the Assistant Registrar's office to restore access.</p>
+    </div>
+  )
+}
 
 function AssignMeta({ a }: { a: Activity }) {
+  const STUDENTS = useEnrolled(useCourseIdOfActivity(a.id))
   const submissions = useLmsStore((s) => s.submissions)
   const { isTeacher } = useRole()
   if (!a.assign) return null
@@ -200,8 +214,10 @@ function SectionCard({ course, section, open, onToggle }: { course: Course; sect
 }
 
 function Participants({ course }: { course: Course }) {
+  const STUDENTS = useEnrolled(course.id)
+  const lecturer = useAdminStore((x) => x.courseLecturers[course.id]) ?? course.lecturer
   const [q, setQ] = useState('')
-  const rows = [{ id: 'l1', name: course.lecturer, email: `${course.lecturer.split(' ').pop()?.toLowerCase()}@altusvera.lk`, role: 'Lecturer' }, ...STUDENTS.map((s) => ({ ...s, role: 'Student' }))]
+  const rows = [{ id: 'l1', name: lecturer, email: `${lecturer.split(' ').pop()?.toLowerCase()}@altusvera.lk`, role: 'Lecturer' }, ...STUDENTS.map((s) => ({ ...s, role: 'Student' }))]
     .filter((r) => `${r.name} ${r.email}`.toLowerCase().includes(q.toLowerCase()))
   return (
     <div className="card overflow-hidden">
@@ -243,6 +259,9 @@ export function CoursePage() {
   const toggleStar = useLmsStore((s) => s.toggleStar)
   const { isTeacher } = useRole()
   const [closed, setClosed] = useState<Record<number, boolean>>({})
+  const lecturerName = useAdminStore((x) => (course ? x.courseLecturers[course.id] : undefined))
+  const block = useBlockState(course?.id)
+  const enrolledHere = useAdminStore((x) => (course ? enrolledIds(x.enrolments, course.id).includes(CURRENT_STUDENT_ID) : true))
 
   useEffect(() => { if (course) touch(course.id) }, [course?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -269,7 +288,7 @@ export function CoursePage() {
               {course.shortName}-{course.fullName}
               <button onClick={() => toggleStar(course.id)} title={course.starred ? 'Unstar' : 'Star'}><Star size={20} fill={course.starred ? 'var(--color-amber)' : 'none'} color={course.starred ? 'var(--color-amber)' : 'var(--color-text-muted)'} /></button>
             </h1>
-            <div className="text-sm muted mt-1">Lecturer: {course.lecturer}</div>
+            <div className="text-sm muted mt-1">Lecturer: {lecturerName ?? course.lecturer}</div>
           </div>
           {!isTeacher ? (
             <div className="w-64">
@@ -290,7 +309,7 @@ export function CoursePage() {
         </div>
       </div>
 
-      {['assign', 'quiz', 'forum', 'choice', 'resource', 'badges'].includes(tab) ? <ActivityIndex course={course} kind={tab as 'assign'} /> : tab === 'participants' ? <Participants course={course} /> : tab === 'grades' ? <CourseGrades course={course} /> : (
+      {!isTeacher && (block.blocked || !enrolledHere) ? <RestrictedCourse reason={block.blocked ? block.reason! : 'You are not enrolled in this course.'} /> : ['assign', 'quiz', 'forum', 'choice', 'resource', 'badges'].includes(tab) ? <ActivityIndex course={course} kind={tab as 'assign'} /> : tab === 'participants' ? <Participants course={course} /> : tab === 'grades' ? <CourseGrades course={course} /> : (
         <div className="grid xl:grid-cols-[260px_minmax(0,1fr)] gap-6">
           <aside className="hidden xl:block">
             <div className="card p-4 sticky top-24">

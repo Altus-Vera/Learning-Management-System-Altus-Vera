@@ -1,9 +1,19 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Home, CalendarDays, GraduationCap, BookOpen, Library, ScrollText, MessageSquareWarning, ChevronDown, FolderLock, Award } from 'lucide-react'
 import { useState } from 'react'
-import { useLmsStore } from '../../store/lmsStore'
-import { useUiStore } from '../../store/uiStore'
+import { ShieldCheck, Users, Wallet, BookPlus, ClipboardList, History } from 'lucide-react'
+import { useUiStore, useIsRegistrar } from '../../store/uiStore'
 import { BrandLogo } from '../BrandLogo'
+import { useMyCourses } from '../../store/adminStore'
+
+const REGISTRAR = [
+  { to: '/admin', label: 'Registrar overview', icon: ShieldCheck, end: true },
+  { to: '/admin/students', label: 'Batches & students', icon: Users },
+  { to: '/admin/payments', label: 'Payments', icon: Wallet },
+  { to: '/admin/enrolment', label: 'Course assignment', icon: BookPlus },
+  { to: '/admin/submissions', label: 'Submissions control', icon: ClipboardList },
+  { to: '/admin/audit', label: 'Audit log', icon: History },
+]
 
 const MAIN = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -22,7 +32,7 @@ const RESOURCES = [
 
 export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNavigate: () => void }) {
   const collapsed = useUiStore((s) => s.sidebarCollapsed)
-  const courses = useLmsStore((s) => s.courses)
+  const courses = useMyCourses()
   const [coursesOpen, setCoursesOpen] = useState(true)
   const { pathname } = useLocation()
   const inProgress = courses.filter((c) => !c.term.startsWith('Year 3'))
@@ -33,6 +43,7 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
     }`
 
   const wide = !collapsed || mobileOpen
+  const registrar = useIsRegistrar()
 
   return (
     <aside
@@ -51,6 +62,19 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 pb-6 space-y-6" onClick={onNavigate}>
+        {registrar && (
+          <div>
+            {wide ? <div className="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>Assistant Registrar</div> : <div className="mx-3 mb-2 border-t" style={{ borderColor: 'var(--color-border)' }} />}
+            <div className="space-y-1">
+              {REGISTRAR.map(({ to, label, icon: Icon, end }) => (
+                <NavLink key={to} to={to} end={end} className={linkCls} title={label}>
+                  <Icon size={19} className="shrink-0" />
+                  {wide && <span className="truncate">{label}</span>}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="space-y-1">
           {MAIN.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} className={linkCls} title={label}>

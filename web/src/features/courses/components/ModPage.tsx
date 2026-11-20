@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { Download, ExternalLink, Check, Circle, FileText, Pencil, Save } from 'lucide-react'
 import { useLmsStore, findActivity, type Activity } from '../../../store/lmsStore'
 import { useRole } from '../../../store/uiStore'
+import { useBlockState } from '../../../store/adminStore'
 import { ActivityIcon, activityLabel } from '../../../components/ActivityIcon'
 import { ActivityNav } from '../../../components/ActivityNav'
 import { toast } from '../../../components/Toast'
@@ -70,6 +71,8 @@ export default function ModPage() {
   const done = useLmsStore((s) => !!s.completion[Number(activityId)])
   const toggle = useLmsStore((s) => s.toggleCompletion)
   const { isTeacher } = useRole()
+  const block = useBlockState(found?.course.id)
+  if (!isTeacher && found && block.blocked) return <Navigate to={`/courses/${found.course.id}`} replace />
   if (!found || (!found.activity.visible && !isTeacher) || found.activity.type === 'label') return <Navigate to={`/courses/${courseId}`} replace />
   if (found.activity.type === 'assign') return <Navigate to={`/courses/${courseId}/assign/${activityId}`} replace />
   const { course, section, activity: a } = found

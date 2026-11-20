@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Timer, Save, BarChart3, Settings2, Play, Eye } from 'lucide-react'
 import { useActivityStore, QUIZ_QUESTIONS, useMe, type QuizAttempt } from '../../store/activityStore'
-import { useLmsStore, quizDefaults, STUDENTS, type Activity, type QuizSettings } from '../../store/lmsStore'
+import { useLmsStore, quizDefaults, type Activity, type QuizSettings } from '../../store/lmsStore'
 import { Modal } from '../../components/Modal'
+import { useEnrolled, useCourseIdOfActivity, useBlockState } from '../../store/adminStore'
 import { toast } from '../../components/Toast'
 import { fmtDate, fromLocalInput, toLocalInput } from '../../lib/format'
 
@@ -56,6 +57,7 @@ function StudentQuiz({ a, s }: { a: Activity; s: QuizSettings }) {
   const [active, setActive] = useState<QuizAttempt | null>(null)
   const [review, setReview] = useState<QuizAttempt | null>(null)
   const [confirmStart, setConfirmStart] = useState(false)
+  const block = useBlockState(useCourseIdOfActivity(a.id))
   const now = new Date()
   const notOpen = s.openDate && now < new Date(s.openDate)
   const closed = s.closeDate && now > new Date(s.closeDate)
@@ -90,7 +92,7 @@ function StudentQuiz({ a, s }: { a: Activity; s: QuizSettings }) {
         </div>
       )}
       <div className="text-center space-y-2">
-        {notOpen ? <p className="muted">This quiz will not be available until {fmtDate(s.openDate)}</p>
+        {block.blocked ? <p style={{ color: 'var(--color-red)' }}>Quiz attempts are restricted by the Assistant Registrar: {block.reason}</p> : notOpen ? <p className="muted">This quiz will not be available until {fmtDate(s.openDate)}</p>
           : closed ? <p className="muted">This quiz has closed.</p>
           : left <= 0 ? <p className="muted">No more attempts are allowed</p>
           : <button className="btn btn-primary" onClick={() => setConfirmStart(true)}><Play size={16} /> {used ? 'Re-attempt quiz' : 'Attempt quiz now'}</button>}
@@ -176,6 +178,7 @@ function Review({ attempt, onClose, s }: { attempt: QuizAttempt; onClose: () => 
 }
 
 function QuizResults({ a, s }: { a: Activity; s: QuizSettings }) {
+  const STUDENTS = useEnrolled(useCourseIdOfActivity(a.id))
   const real = useActivityStore((st) => st.attempts[a.id]) ?? EMPTY
   const rows = STUDENTS.map((st, i) => {
     const mine = real.filter((x) => x.userId === st.id && x.finishedAt)

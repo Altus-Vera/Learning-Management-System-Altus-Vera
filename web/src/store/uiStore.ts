@@ -27,6 +27,14 @@ export const useUiStore = create<UiState>()(
   ),
 )
 
+export const roleLabel = (role?: string) => (role === 'Admin' ? 'Assistant Registrar' : role ?? '')
+
+export function useIsRegistrar() {
+  const role = useAuthStore((s) => s.user?.role)
+  const viewAsStudent = useUiStore((s) => s.viewAsStudent)
+  return role === 'Admin' && !viewAsStudent
+}
+
 export function useRole() {
   const role = useAuthStore((s) => s.user?.role ?? 'Student')
   const viewAsStudent = useUiStore((s) => s.viewAsStudent)

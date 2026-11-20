@@ -6,7 +6,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useThemeStore } from '../../store/themeStore'
 import { useLmsStore } from '../../store/lmsStore'
 import { useSocialStore } from '../../store/socialStore'
-import { useRole, useUiStore } from '../../store/uiStore'
+import { useRole, useUiStore, roleLabel } from '../../store/uiStore'
 import { initials } from '../../lib/format'
 
 function useOutside(open: boolean, close: () => void) {
@@ -139,7 +139,7 @@ export function Topbar({ onMobileMenu }: { onMobileMenu: () => void }) {
             <span className="w-8 h-8 rounded-full grid place-items-center text-xs font-bold text-white" style={{ background: 'linear-gradient(135deg,#00B3A1,#0033A0)' }}>{initials(name)}</span>
             <span className="hidden md:block text-left leading-tight">
               <span className="block text-sm font-semibold" style={{ color: 'var(--color-heading)' }}>{name}</span>
-              <span className="block text-[11px] muted">{user?.role}</span>
+              <span className="block text-[11px] muted">{roleLabel(user?.role)}</span>
             </span>
             <ChevronDown size={15} className="muted hidden md:block" />
           </button>

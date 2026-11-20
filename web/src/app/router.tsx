@@ -14,6 +14,13 @@ const SiteHomePage  = lazy(() => import('../features/misc/pages').then((m) => ({
 const ProfilePage   = lazy(() => import('../features/user/ProfilePage').then((m) => ({ default: m.ProfilePage })))
 const BadgesPage    = lazy(() => import('../features/user/ProfilePage').then((m) => ({ default: m.BadgesPage })))
 const SearchPage    = lazy(() => import('../features/user/ProfilePage').then((m) => ({ default: m.CourseSearchPage })))
+const adminPage = (name: 'AdminOverview' | 'AdminStudents' | 'AdminPayments' | 'AdminEnrolment' | 'AdminSubmissions' | 'AdminAudit') => lazy(() => import('../features/admin/AdminPages').then((m) => ({ default: m[name] })))
+const AdminOverview = adminPage('AdminOverview')
+const AdminStudents = adminPage('AdminStudents')
+const AdminPayments = adminPage('AdminPayments')
+const AdminEnrolment = adminPage('AdminEnrolment')
+const AdminSubmissions = adminPage('AdminSubmissions')
+const AdminAudit = adminPage('AdminAudit')
 const NotificationsPage = lazy(() => import('../features/user/NotificationsPage'))
 const PrefsHub      = lazy(() => import('../features/user/PreferencesPages').then((m) => ({ default: m.PreferencesHub })))
 const PrefsSection  = lazy(() => import('../features/user/PreferencesPages').then((m) => ({ default: m.PreferencesSection })))
@@ -50,6 +57,12 @@ export const router = createBrowserRouter([
       { path: '/badges', element: s(<BadgesPage />) },
       { path: '/search', element: s(<SearchPage />) },
       { path: '/notifications', element: s(<NotificationsPage />) },
+      { path: '/admin', element: s(<AdminOverview />) },
+      { path: '/admin/students', element: s(<AdminStudents />) },
+      { path: '/admin/payments', element: s(<AdminPayments />) },
+      { path: '/admin/enrolment', element: s(<AdminEnrolment />) },
+      { path: '/admin/submissions', element: s(<AdminSubmissions />) },
+      { path: '/admin/audit', element: s(<AdminAudit />) },
       { path: '/preferences', element: s(<PrefsHub />) },
       { path: '/preferences/:section', element: s(<PrefsSection />) },
       { path: '/files', element: s(<FilesPage />) },
