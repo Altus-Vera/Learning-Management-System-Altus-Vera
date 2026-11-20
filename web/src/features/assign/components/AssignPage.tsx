@@ -9,6 +9,8 @@ import { toast } from '../../../components/Toast'
 import { fmtDate, fmtShort, fmtSize, fromLocalInput, timeLeft, toLocalInput, initials } from '../../../lib/format'
 import { formatDistanceStrict } from 'date-fns'
 import { ActivityNav } from '../../../components/ActivityNav'
+import { AssignmentAnalytics } from './AssignmentAnalytics'
+import { BarChart3 } from 'lucide-react'
 import { call } from '../../../services/sync'
 import { uploadFile, deleteFile, saveSubmission, submitForGrading, removeSubmission, downloadFile } from '../assignApi'
 import { useActivityStore, useMe, type Comment } from '../../../store/activityStore'
@@ -500,14 +502,14 @@ export default function AssignPage() {
         {a.description && <p className="text-[15px] leading-relaxed">{a.description}</p>}
         {isTeacher && (
           <div className="flex gap-1 -mb-6 -mx-6 px-4 border-t overflow-x-auto" style={{ borderColor: 'var(--color-border)' }}>
-            {([['overview', 'Overview', Clock], ['submissions', 'Submissions', ClipboardCheck], ['settings', 'Settings', Pencil]] as const).map(([k, l, Icon]) => (
+            {([['overview', 'Overview', Clock], ['submissions', 'Submissions', ClipboardCheck], ['analytics', 'Analytics', BarChart3], ['settings', 'Settings', Pencil]] as const).map(([k, l, Icon]) => (
               <button key={k} onClick={() => setParams(k === 'overview' ? {} : { tab: k })} className={`tab flex items-center gap-2 ${tab === k ? 'tab-active' : ''}`}><Icon size={15} />{l}</button>
             ))}
           </div>
         )}
       </div>
 
-      {!isTeacher ? <StudentView a={a} /> : tab === 'settings' ? <SettingsForm key={a.id} a={a} /> : tab === 'submissions' ? <SubmissionsTable a={a} /> : <GradingSummary a={a} onView={() => setParams({ tab: 'submissions' })} />}
+      {!isTeacher ? <StudentView a={a} /> : tab === 'settings' ? <SettingsForm key={a.id} a={a} /> : tab === 'submissions' ? <SubmissionsTable a={a} /> : tab === 'analytics' ? <AssignmentAnalytics a={a} onOpenSubmissions={() => setParams({ tab: 'submissions' })} /> : <GradingSummary a={a} onView={() => setParams({ tab: 'submissions' })} />}
       <ActivityNav course={course} current={a.id} />
     </div>
   )
